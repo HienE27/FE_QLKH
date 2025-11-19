@@ -403,7 +403,8 @@ export default function ProductsPage() {
                             {product.code}
                           </td>
                           <td className="px-4 text-center text-sm">
-                            {product.categoryId ?? '-'}
+                            {/* {product.categoryId ?? '-'} */}
+                              {product.categoryName ?? '-'}
                           </td>
                           <td className="px-4 text-center text-sm">Cái</td>
                           <td className="px-4 text-center text-sm">

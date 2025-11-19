@@ -10,6 +10,7 @@ export interface Product {
   status: string;
   categoryId?: number | null;
   supplierId?: number | null;
+  categoryName: string | null;   // <── THÊM
   createdAt?: string;
   updatedAt?: string;
 }

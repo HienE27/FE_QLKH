@@ -10,14 +10,9 @@ import {
   updateProduct,
   uploadProductImage,
 } from '@/services/product.service';
+import { getCategories } from '@/services/category.service';
 import type { Product, ProductPayload } from '@/types/product';
-
-const CATEGORY_OPTIONS = [
-  { id: 1, label: 'Điện thoại' },
-  { id: 2, label: 'Tai nghe' },
-  { id: 3, label: 'Cáp sạc - Củ sạc' },
-  { id: 4, label: 'Phụ kiện' },
-];
+import type { Category } from '@/types/category';
 
 const UNIT_OPTIONS = ['Cái', 'Chiếc', 'Bộ', 'Hộp', 'Thùng'];
 
@@ -30,16 +25,14 @@ function parseMoney(input: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// ✅ Hàm build full URL từ relative path
+// build full URL từ relative path
 function buildImageUrl(path: string | null): string | null {
   if (!path) return null;
-  
-  // Nếu đã là full URL thì giữ nguyên
+
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  
-  // Nếu là relative path thì thêm base URL
+
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${cleanPath}`;
 }
@@ -64,10 +57,13 @@ export default function EditProductPage() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
-  // ✅ Image state
-  const [currentImagePath, setCurrentImagePath] = useState<string | null>(null); // Relative path từ DB
+  // image state
+  const [currentImagePath, setCurrentImagePath] = useState<string | null>(null); // relative path
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // categories từ BE
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // Load product data
   useEffect(() => {
@@ -91,11 +87,9 @@ export default function EditProductPage() {
         setCategoryId(p.categoryId ?? '');
         setStatus(p.status === 'inactive' ? 'inactive' : 'active');
 
-        // ✅ Lưu relative path và build preview URL
         const imagePath = p.image ?? null;
         setCurrentImagePath(imagePath);
         setPreviewUrl(buildImageUrl(imagePath));
-        
       } catch (err: unknown) {
         if (cancelled) return;
         const message =
@@ -107,12 +101,34 @@ export default function EditProductPage() {
     };
 
     fetchProduct();
+
     return () => {
       cancelled = true;
     };
   }, [productId]);
 
-  // Handle form submit
+  // Load categories
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchCategories = async () => {
+      try {
+        const list = await getCategories();
+        if (!cancelled) {
+          setCategories(list);
+        }
+      } catch (err) {
+        console.error('Lỗi tải nhóm hàng', err);
+      }
+    };
+
+    fetchCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -121,14 +137,13 @@ export default function EditProductPage() {
     try {
       let finalImagePath = currentImagePath;
 
-      // ✅ Chỉ upload nếu có file mới
+      // Chỉ upload nếu có file mới
       if (newImageFile) {
         try {
           const uploadedPath = await uploadProductImage(newImageFile);
-          finalImagePath = uploadedPath; // Backend trả về relative path
-          console.log('✅ Uploaded new image:', uploadedPath);
+          finalImagePath = uploadedPath; // relative path
         } catch (uploadErr) {
-          console.error('❌ Upload failed:', uploadErr);
+          console.error('Upload failed:', uploadErr);
           throw new Error('Không thể upload hình ảnh mới');
         }
       }
@@ -137,7 +152,7 @@ export default function EditProductPage() {
         code,
         name,
         shortDescription: description,
-        image: finalImagePath, // Lưu relative path vào DB
+        image: finalImagePath,
         unitPrice: parseMoney(price),
         quantity: 0,
         status,
@@ -145,27 +160,20 @@ export default function EditProductPage() {
         supplierId: null,
       };
 
-      console.log('📤 Sending payload:', payload);
-
       await updateProduct(productId, payload);
-      
-      console.log('✅ Product updated successfully');
       router.push('/dashboard/products');
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Có lỗi xảy ra khi cập nhật hàng hóa';
       setError(message);
-      console.error('❌ Update failed:', err);
     } finally {
       setSaving(false);
     }
   };
 
-  // Handle image file change
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
-    
-    // ✅ Cleanup previous blob URL
+
     if (previewUrl && previewUrl.startsWith('blob:')) {
       URL.revokeObjectURL(previewUrl);
     }
@@ -173,18 +181,14 @@ export default function EditProductPage() {
     setNewImageFile(file);
 
     if (file) {
-      // Tạo blob URL cho preview
       const blobUrl = URL.createObjectURL(file);
       setPreviewUrl(blobUrl);
-      console.log('🖼️ New image selected:', file.name);
     } else {
-      // Nếu bỏ chọn file, quay về ảnh cũ
       setPreviewUrl(buildImageUrl(currentImagePath));
-      console.log('↩️ Reverted to current image');
     }
   };
 
-  // ✅ Cleanup blob URL on unmount
+  // cleanup blob URL
   useEffect(() => {
     return () => {
       if (previewUrl && previewUrl.startsWith('blob:')) {
@@ -285,9 +289,9 @@ export default function EditProductPage() {
                       required
                     >
                       <option value="">Chọn nhóm hàng</option>
-                      {CATEGORY_OPTIONS.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.label}
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
                         </option>
                       ))}
                     </select>
@@ -380,7 +384,7 @@ export default function EditProductPage() {
                   />
                 </div>
 
-                {/* ✅ Hình ảnh */}
+                {/* Hình ảnh */}
                 <div className="grid grid-cols-3 gap-4 items-start">
                   <label
                     htmlFor="image"
@@ -397,8 +401,7 @@ export default function EditProductPage() {
                       onChange={handleImageChange}
                       className="w-full px-4 py-2 border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    
-                    {/* Preview image */}
+
                     {previewUrl ? (
                       <div className="relative">
                         <img
@@ -406,8 +409,8 @@ export default function EditProductPage() {
                           alt="Xem trước hình ảnh"
                           className="h-32 w-32 rounded border object-cover"
                           onError={(e) => {
-                            console.error('❌ Image load error:', previewUrl);
-                            e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128"%3E%3Crect fill="%23ddd" width="128" height="128"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+                            e.currentTarget.src =
+                              'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128"%3E%3Crect fill="%23ddd" width="128" height="128"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
                           }}
                         />
                         {newImageFile && (

@@ -1,18 +1,13 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import { createProduct, uploadProductImage } from '@/services/product.service';
+import { getCategories } from '@/services/category.service';
 import type { ProductPayload } from '@/types/product';
-
-const CATEGORY_OPTIONS = [
-  { id: 1, label: 'Điện thoại' },
-  { id: 2, label: 'Tai nghe' },
-  { id: 3, label: 'Cáp sạc - Củ sạc' },
-  { id: 4, label: 'Phụ kiện' },
-];
+import type { Category } from '@/types/category';
 
 const UNIT_OPTIONS = ['Cái', 'Chiếc', 'Bộ', 'Hộp', 'Thùng'];
 
@@ -46,6 +41,30 @@ export default function CreateProductPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // danh mục từ BE
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchCategories = async () => {
+      try {
+        const list = await getCategories();
+        if (!cancelled) {
+          setCategories(list);
+        }
+      } catch (err) {
+        console.error('Lỗi tải nhóm hàng', err);
+      }
+    };
+
+    fetchCategories();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -55,7 +74,7 @@ export default function CreateProductPage() {
       let imagePath: string | null = null;
 
       if (imageFile) {
-        // ✅ BE trả về relative path: /uploads/products/xxx.jpg
+        // BE trả về relative path: /uploads/products/xxx.jpg
         imagePath = await uploadProductImage(imageFile);
       }
 
@@ -181,9 +200,9 @@ export default function CreateProductPage() {
                   required
                 >
                   <option value="">Chọn nhóm hàng</option>
-                  {CATEGORY_OPTIONS.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.label}
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
