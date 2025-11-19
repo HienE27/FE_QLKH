@@ -30,23 +30,18 @@ function parseMoney(input: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Chuẩn hoá URL ảnh: luôn đi qua gateway 8080
-function resolveImageUrl(raw: string | null): string | null {
-  if (!raw) return null;
-
-  // TH1: BE trả full URL, ví dụ: http://localhost:8081/uploads/products/xxx.jpg
-  if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    try {
-      const url = new URL(raw);
-      // Lấy phần path (/uploads/products/xxx.jpg) và gắn vào gateway 8080
-      return `${API_BASE_URL}${url.pathname}`;
-    } catch {
-      // nếu parse lỗi thì coi như relative path
-    }
+// ✅ Hàm build full URL từ relative path
+function buildImageUrl(path: string | null): string | null {
+  if (!path) return null;
+  
+  // Nếu đã là full URL thì giữ nguyên
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
   }
-
-  // TH2: BE trả relative path: "/uploads/..." hoặc "uploads/..."
-  return `${API_BASE_URL}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  
+  // Nếu là relative path thì thêm base URL
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${cleanPath}`;
 }
 
 type RouteParams = { id: string };
@@ -60,7 +55,7 @@ export default function EditProductPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // form state
+  // Form state
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
@@ -69,11 +64,12 @@ export default function EditProductPage() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
-  // image state
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null); // URL lưu trong DB
-  const [imagePreview, setImagePreview] = useState<string | null>(null); // URL hiển thị
+  // ✅ Image state
+  const [currentImagePath, setCurrentImagePath] = useState<string | null>(null); // Relative path từ DB
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  // Load product data
   useEffect(() => {
     if (!productId || Number.isNaN(productId)) {
       setError('ID sản phẩm không hợp lệ');
@@ -95,9 +91,11 @@ export default function EditProductPage() {
         setCategoryId(p.categoryId ?? '');
         setStatus(p.status === 'inactive' ? 'inactive' : 'active');
 
-        const raw = p.image ?? null;
-        setImageUrl(raw);
-        setImagePreview(resolveImageUrl(raw));
+        // ✅ Lưu relative path và build preview URL
+        const imagePath = p.image ?? null;
+        setCurrentImagePath(imagePath);
+        setPreviewUrl(buildImageUrl(imagePath));
+        
       } catch (err: unknown) {
         if (cancelled) return;
         const message =
@@ -114,25 +112,32 @@ export default function EditProductPage() {
     };
   }, [productId]);
 
+  // Handle form submit
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
 
     try {
-      let finalImageUrl = imageUrl;
+      let finalImagePath = currentImagePath;
 
-      // Nếu chọn ảnh mới → upload, còn không giữ ảnh cũ
-      if (imageFile) {
-        const uploadedUrl = await uploadProductImage(imageFile);
-        finalImageUrl = uploadedUrl;
+      // ✅ Chỉ upload nếu có file mới
+      if (newImageFile) {
+        try {
+          const uploadedPath = await uploadProductImage(newImageFile);
+          finalImagePath = uploadedPath; // Backend trả về relative path
+          console.log('✅ Uploaded new image:', uploadedPath);
+        } catch (uploadErr) {
+          console.error('❌ Upload failed:', uploadErr);
+          throw new Error('Không thể upload hình ảnh mới');
+        }
       }
 
       const payload: ProductPayload = {
         code,
         name,
         shortDescription: description,
-        image: finalImageUrl,
+        image: finalImagePath, // Lưu relative path vào DB
         unitPrice: parseMoney(price),
         quantity: 0,
         status,
@@ -140,28 +145,53 @@ export default function EditProductPage() {
         supplierId: null,
       };
 
+      console.log('📤 Sending payload:', payload);
+
       await updateProduct(productId, payload);
+      
+      console.log('✅ Product updated successfully');
       router.push('/dashboard/products');
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Có lỗi xảy ra khi cập nhật hàng hóa';
       setError(message);
+      console.error('❌ Update failed:', err);
     } finally {
       setSaving(false);
     }
   };
 
+  // Handle image file change
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
-    setImageFile(file);
+    
+    // ✅ Cleanup previous blob URL
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setNewImageFile(file);
 
     if (file) {
+      // Tạo blob URL cho preview
       const blobUrl = URL.createObjectURL(file);
-      setImagePreview(blobUrl);
+      setPreviewUrl(blobUrl);
+      console.log('🖼️ New image selected:', file.name);
     } else {
-      setImagePreview(resolveImageUrl(imageUrl));
+      // Nếu bỏ chọn file, quay về ảnh cũ
+      setPreviewUrl(buildImageUrl(currentImagePath));
+      console.log('↩️ Reverted to current image');
     }
   };
+
+  // ✅ Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   return (
     <div className="min-h-screen">
@@ -277,7 +307,7 @@ export default function EditProductPage() {
                   </div>
                 </div>
 
-                {/* Đơn vị tính (FE) */}
+                {/* Đơn vị tính */}
                 <div className="grid grid-cols-3 gap-4 items-center">
                   <label
                     htmlFor="unit"
@@ -350,7 +380,7 @@ export default function EditProductPage() {
                   />
                 </div>
 
-                {/* Hình ảnh */}
+                {/* ✅ Hình ảnh */}
                 <div className="grid grid-cols-3 gap-4 items-start">
                   <label
                     htmlFor="image"
@@ -358,7 +388,7 @@ export default function EditProductPage() {
                   >
                     Hình ảnh
                   </label>
-                  <div className="col-span-2 space-y-2">
+                  <div className="col-span-2 space-y-3">
                     <input
                       id="image"
                       type="file"
@@ -367,12 +397,29 @@ export default function EditProductPage() {
                       onChange={handleImageChange}
                       className="w-full px-4 py-2 border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    {imagePreview && (
-                      <img
-                        src={imagePreview}
-                        alt="Xem trước hình ảnh"
-                        className="h-24 rounded border object-cover"
-                      />
+                    
+                    {/* Preview image */}
+                    {previewUrl ? (
+                      <div className="relative">
+                        <img
+                          src={previewUrl}
+                          alt="Xem trước hình ảnh"
+                          className="h-32 w-32 rounded border object-cover"
+                          onError={(e) => {
+                            console.error('❌ Image load error:', previewUrl);
+                            e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128"%3E%3Crect fill="%23ddd" width="128" height="128"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+                          }}
+                        />
+                        {newImageFile && (
+                          <span className="text-xs text-green-600 mt-1 block">
+                            ✓ Đã chọn ảnh mới
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="h-32 w-32 rounded border bg-gray-100 flex items-center justify-center text-gray-400 text-sm">
+                        Chưa có ảnh
+                      </div>
                     )}
                   </div>
                 </div>

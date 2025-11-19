@@ -7,7 +7,6 @@ import Sidebar from '@/components/layout/Sidebar';
 import { createProduct, uploadProductImage } from '@/services/product.service';
 import type { ProductPayload } from '@/types/product';
 
-
 const CATEGORY_OPTIONS = [
   { id: 1, label: 'Điện thoại' },
   { id: 2, label: 'Tai nghe' },
@@ -47,25 +46,24 @@ export default function CreateProductPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      let imageUrl: string | null = null;
+      let imagePath: string | null = null;
 
       if (imageFile) {
-        // BE trả full URL (http://localhost:8081/uploads/products/xxx.jpg)
-        imageUrl = await uploadProductImage(imageFile);
+        // ✅ BE trả về relative path: /uploads/products/xxx.jpg
+        imagePath = await uploadProductImage(imageFile);
       }
 
       const payload: ProductPayload = {
         code,
         name,
         shortDescription: description,
-        image: imageUrl,
+        image: imagePath, // Lưu relative path vào DB
         unitPrice: parseMoney(price),
         quantity: 0,
         status,
@@ -86,8 +84,6 @@ export default function CreateProductPage() {
     }
   };
 
-
-
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     setImageFile(file);
@@ -99,10 +95,6 @@ export default function CreateProductPage() {
       setImagePreview(null);
     }
   };
-
-
-
-
 
   return (
     <div className="min-h-screen">
@@ -353,7 +345,6 @@ export default function CreateProductPage() {
               />
             </div>
 
-
             {/* Hình ảnh */}
             <div className="grid grid-cols-3 gap-4 items-start">
               <label
@@ -379,7 +370,6 @@ export default function CreateProductPage() {
                 )}
               </div>
             </div>
-
 
             {/* Trạng thái */}
             <div className="grid grid-cols-3 gap-4 items-center">
