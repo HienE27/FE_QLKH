@@ -3,8 +3,16 @@
 import { useState, useEffect } from 'react';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
+import { ensureVnFont } from '@/lib/pdf';
 import { getProducts } from '@/services/product.service';
-import { getSupplierImports } from '@/services/inventory.service';
+import {
+    getSupplierImports,
+    getInternalImports,
+    getStaffImports,
+    getSupplierExports,
+    getInternalExports,
+    getStaffExports
+} from '@/services/inventory.service';
 import type { Product } from '@/types/product';
 
 const formatCurrency = (value: number) =>
@@ -52,23 +60,47 @@ export default function StockMovementReportPage() {
             setLoading(true);
             setError(null);
 
-            // Load products and imports
-            const [products, imports] = await Promise.all([
+            const params = {
+                fromDate: filterFromDate || undefined,
+                toDate: filterToDate || undefined,
+            };
+
+            // Load products and all imports/exports (NCC, INTERNAL, NVBH)
+            const [
+                products,
+                supplierImports,
+                internalImports,
+                staffImports,
+                supplierExports,
+                internalExports,
+                staffExports
+            ] = await Promise.all([
                 getProducts(),
-                getSupplierImports({
-                    fromDate: filterFromDate || undefined,
-                    toDate: filterToDate || undefined,
-                }),
+                getSupplierImports(params),
+                getInternalImports(params),
+                getStaffImports(params),
+                getSupplierExports(params),
+                getInternalExports(params),
+                getStaffExports(params),
             ]);
+
+            // Gộp tất cả imports và exports
+            const allImports = [...supplierImports, ...internalImports, ...staffImports];
+            const allExports = [...supplierExports, ...internalExports, ...staffExports];
+
+            console.log('📊 Stock Movement Report:');
+            console.log('- Total products:', products.length);
+            console.log('- Total imports:', allImports.length);
+            console.log('- Total exports:', allExports.length);
 
             // Calculate stock movements for each product
             const movements: StockMovement[] = products.map(product => {
                 const currentStock = product.quantity || 0;
                 const unitPrice = product.unitPrice || 0;
 
-                // Calculate total import for this product
+                // Calculate total import for this product (from all sources)
                 let totalImport = 0;
-                imports.forEach(importReceipt => {
+                allImports.forEach(importReceipt => {
                     if (importReceipt.status === 'IMPORTED') {
                         importReceipt.items?.forEach(item => {
                             if (item.productId === product.id) {
@@ -78,8 +110,17 @@ export default function StockMovementReportPage() {
                     }
                 });
 
-                // For demo: assume export = 20% of import (in real app, fetch from export API)
-                const totalExport = Math.floor(totalImport * 0.2);
+                // Calculate total export for this product (to all destinations)
+                let totalExport = 0;
+                allExports.forEach(exportReceipt => {
+                    if (exportReceipt.status === 'EXPORTED') {
+                        exportReceipt.items?.forEach(item => {
+                            if (item.productId === product.id) {
+                                totalExport += item.quantity;
+                            }
+                        });
+                    }
+                });
 
                 // Calculate opening stock (current - import + export)
                 const openingStock = Math.max(0, currentStock - totalImport + totalExport);
@@ -228,12 +269,82 @@ export default function StockMovementReportPage() {
         setSortClosing('none');
     };
 
-    const handleExportExcel = () => {
-        alert('Chức năng xuất Excel đang được phát triển');
+    const buildExportRows = () =>
+        filteredData.map((item, index) => ({
+            STT: index + 1,
+            'Mã hàng': item.productCode,
+            'Tên hàng hóa': item.productName,
+            'Tồn đầu': item.openingStock,
+            'Nhập': item.totalImport,
+            'Xuất': item.totalExport,
+            'Tồn cuối': item.closingStock,
+            'Đơn giá': item.unitPrice,
+            'Giá trị tồn cuối': item.closingValue,
+        }));
+
+    const handleExportExcel = async () => {
+        try {
+            if (!filteredData.length) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+            const XLSX = await import('xlsx');
+            const rows = buildExportRows();
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Bao_cao_xuat_nhap_ton');
+            const date = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `bao-cao-xuat-nhap-ton-${date}.xlsx`);
+        } catch (err) {
+            console.error('Export Excel failed', err);
+            alert('Xuất Excel thất bại, vui lòng thử lại.');
+        }
     };
 
-    const handleExportPDF = () => {
-        alert('Chức năng xuất PDF đang được phát triển');
+    const handleExportPDF = async () => {
+        try {
+            if (!filteredData.length) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+            const { default: jsPDF } = await import('jspdf');
+            const autoTable = (await import('jspdf-autotable')).default;
+            const doc = new jsPDF({ orientation: 'landscape' });
+
+            await ensureVnFont(doc);
+
+            doc.setFontSize(16);
+            doc.text('Báo cáo xuất nhập tồn', 14, 18);
+            doc.setFontSize(11);
+            doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
+            doc.text(`Tổng mặt hàng: ${filteredData.length}`, 14, 32);
+
+            const rows = buildExportRows().map(row => [
+                row.STT,
+                row['Mã hàng'],
+                row['Tên hàng hóa'],
+                formatCurrency(row['Tồn đầu']),
+                formatCurrency(row['Nhập']),
+                formatCurrency(row['Xuất']),
+                formatCurrency(row['Tồn cuối']),
+                formatCurrency(row['Đơn giá']),
+                formatCurrency(row['Giá trị tồn cuối']),
+            ]);
+
+            autoTable(doc, {
+                head: [['STT', 'Mã hàng', 'Tên hàng hóa', 'Tồn đầu', 'Nhập', 'Xuất', 'Tồn cuối', 'Đơn giá', 'Giá trị tồn cuối']],
+                body: rows,
+                startY: 38,
+                styles: { font: 'Roboto', fontSize: 9 },
+                headStyles: { fillColor: [0, 70, 255], font: 'Roboto' },
+            });
+
+            const date = new Date().toISOString().split('T')[0];
+            doc.save(`bao-cao-xuat-nhap-ton-${date}.pdf`);
+        } catch (err) {
+            console.error('Export PDF failed', err);
+            alert('Xuất PDF thất bại, vui lòng thử lại.');
+        }
     };
 
     // Calculate statistics

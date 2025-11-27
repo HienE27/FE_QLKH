@@ -6,8 +6,10 @@ import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import Pagination from '@/components/common/Pagination';
 import { usePagination } from '@/hooks/usePagination';
-import { getSupplierExports, type SupplierExport } from '@/services/inventory.service';
+import { getSupplierExports, getInternalExports, getStaffExports, type SupplierExport, type InternalExport, type StaffExport } from '@/services/inventory.service';
 import { getSuppliers, type Supplier } from '@/services/supplier.service';
+import { getStores, type Store } from '@/services/store.service';
+import { ensureVnFont } from '@/lib/pdf';
 
 const formatCurrency = (value: number) =>
     value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
@@ -19,10 +21,21 @@ function formatDate(value: string | null | undefined) {
     return d.toLocaleDateString('vi-VN');
 }
 
+// Normalized type để gộp cả 3 loại exports với các field chung
+interface NormalizedExport {
+    id: number;
+    code: string;
+    supplierId: number;
+    supplierName: string | null | undefined;
+    exportsDate: string;
+    totalValue: number;
+    status: string;
+    exportType: 'NCC' | 'INTERNAL' | 'NVBH';
+}
+
 export default function ExportReportPage() {
     const router = useRouter();
-    const [data, setData] = useState<SupplierExport[]>([]);
-    const [filteredData, setFilteredData] = useState<SupplierExport[]>([]);
+    const [filteredData, setFilteredData] = useState<NormalizedExport[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -33,6 +46,7 @@ export default function ExportReportPage() {
     const [filterFromDate, setFilterFromDate] = useState('');
     const [filterToDate, setFilterToDate] = useState('');
     const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'EXPORTED' | 'CANCELLED'>('ALL');
+    const [filterType, setFilterType] = useState<'ALL' | 'NCC' | 'INTERNAL' | 'NVBH'>('ALL');
 
     // Sort states
     const [sortSupplier, setSortSupplier] = useState<'none' | 'asc' | 'desc'>('none');
@@ -49,12 +63,16 @@ export default function ExportReportPage() {
         resetPage,
     } = usePagination(filteredData, 10);
 
-    // Load suppliers
+    // Load all suppliers (NCC, INTERNAL, NVBH)
     useEffect(() => {
         const fetchSuppliers = async () => {
             try {
-                const list = await getSuppliers('NCC');
-                setSuppliers(list);
+                const [nccList, internalList, nvbhList] = await Promise.all([
+                    getSuppliers('NCC'),
+                    getSuppliers('INTERNAL'),
+                    getSuppliers('NVBH'),
+                ]);
+                setSuppliers([...nccList, ...internalList, ...nvbhList]);
             } catch (e) {
                 console.error(e);
             }
@@ -67,19 +85,90 @@ export default function ExportReportPage() {
             setLoading(true);
             setError(null);
 
-            const exports = await getSupplierExports({
+            const params = {
                 status: filterStatus === 'ALL' ? undefined : filterStatus,
                 code: filterCode || undefined,
                 fromDate: filterFromDate || undefined,
                 toDate: filterToDate || undefined,
+            };
+
+            // Gộp dữ liệu từ cả 3 nguồn
+            const [supplierExports, internalExports, staffExports] = await Promise.all([
+                getSupplierExports(params),
+                getInternalExports(params),
+                getStaffExports(params),
+            ]);
+
+            // Lấy tất cả suppliers (bao gồm cả NCC, INTERNAL, NVBH) để map tên
+            const allSuppliers = await getSuppliers(); // Lấy tất cả không filter
+            const supplierMap = new Map(allSuppliers.map(s => [s.id, s.name]));
+
+            console.log('🔍 Debug Export Report:');
+            console.log('- Total supplierExports:', supplierExports.length);
+            console.log('- Total internalExports:', internalExports.length);
+            console.log('- Total staffExports (NVBH):', staffExports.length);
+            console.log('- Total suppliers:', allSuppliers.length);
+            console.log('- Supplier Map:', supplierMap);
+
+            // Normalize data - NCC exports
+            const normalizedSupplierExports: NormalizedExport[] = supplierExports.map(item => ({
+                id: item.id,
+                code: item.code,
+                supplierId: item.supplierId,
+                supplierName: item.supplierName,
+                exportsDate: item.exportsDate,
+                totalValue: item.totalValue,
+                status: item.status,
+                exportType: 'NCC' as const,
+            }));
+
+            // Normalize data - Internal exports
+            const normalizedInternalExports: NormalizedExport[] = internalExports.map(item => {
+                // Với Internal Export: supplierId = kho nguồn (nơi xuất hàng)
+                // Backend đã map tên kho nguồn vào supplierName
+                return {
+                    id: item.id,
+                    code: item.code,
+                    supplierId: item.supplierId,
+                    supplierName: item.supplierName || supplierMap.get(item.supplierId) || `Kho #${item.supplierId}`,
+                    exportsDate: item.exportsDate,
+                    totalValue: item.totalValue,
+                    status: item.status,
+                    exportType: 'INTERNAL' as const,
+                };
             });
 
-            setData(exports);
+            // Normalize data - NVBH exports (Staff exports)
+            const normalizedStaffExports: NormalizedExport[] = staffExports.map(item => ({
+                id: item.id,
+                code: item.code,
+                supplierId: item.staffId,
+                supplierName: item.staffName || supplierMap.get(item.staffId) || `NVBH #${item.staffId}`,
+                exportsDate: item.exportsDate,
+                totalValue: item.totalValue,
+                status: item.status,
+                exportType: 'NVBH' as const,
+            }));
+
+            console.log('- NCC exports:', normalizedSupplierExports.length);
+            console.log('- Internal exports:', normalizedInternalExports.length);
+            console.log('- NVBH exports:', normalizedStaffExports.length);
+
+            const allExports: NormalizedExport[] = [
+                ...normalizedSupplierExports,
+                ...normalizedInternalExports,
+                ...normalizedStaffExports,
+            ];
+
+            // Filter by type if selected
+            let filtered = allExports;
+            if (filterType !== 'ALL') {
+                filtered = allExports.filter(item => item.exportType === filterType);
+            }
 
             // Filter by supplier if selected
-            let filtered = exports;
             if (filterSupplier !== 'ALL') {
-                filtered = exports.filter(item => item.supplierId === filterSupplier);
+                filtered = filtered.filter(item => item.supplierId === filterSupplier);
             }
 
             // Apply sorting
@@ -95,7 +184,7 @@ export default function ExportReportPage() {
         }
     };
 
-    const applySorting = (data: SupplierExport[]) => {
+    const applySorting = (data: NormalizedExport[]) => {
         let sorted = [...data];
 
         // Sort by supplier name
@@ -175,17 +264,95 @@ export default function ExportReportPage() {
         setFilterFromDate('');
         setFilterToDate('');
         setFilterStatus('ALL');
+        setFilterType('ALL');
         setSortSupplier('none');
         setSortDate('none');
         setSortValue('none');
     };
 
-    const handleExportExcel = () => {
-        alert('Chức năng xuất Excel đang được phát triển');
+    const buildExportRows = () =>
+        filteredData.map((item, index) => ({
+            STT: index + 1,
+            'Mã phiếu': item.code,
+            'Loại phiếu':
+                item.exportType === 'NCC'
+                    ? 'NCC'
+                    : item.exportType === 'INTERNAL'
+                        ? 'Nội bộ'
+                        : 'NVBH',
+            'Đích đến': item.supplierName ?? '',
+            'Ngày xuất': formatDate(item.exportsDate),
+            'Tổng giá trị': item.totalValue,
+            'Trạng thái':
+                item.status === 'EXPORTED'
+                    ? 'Đã xuất'
+                    : item.status === 'PENDING'
+                        ? 'Chờ xử lý'
+                        : 'Đã hủy',
+        }));
+
+    const handleExportExcel = async () => {
+        try {
+            if (!filteredData.length) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+            const XLSX = await import('xlsx');
+            const rows = buildExportRows();
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Bao_cao_xuat_kho');
+            const date = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `bao-cao-xuat-kho-${date}.xlsx`);
+        } catch (err) {
+            console.error('Export Excel failed', err);
+            alert('Xuất Excel thất bại, vui lòng thử lại.');
+        }
     };
 
-    const handleExportPDF = () => {
-        alert('Chức năng xuất PDF đang được phát triển');
+    const handleExportPDF = async () => {
+        try {
+            if (!filteredData.length) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+            const { default: jsPDF } = await import('jspdf');
+            const autoTable = (await import('jspdf-autotable')).default;
+            const doc = new jsPDF({ orientation: 'landscape' });
+
+            await ensureVnFont(doc);
+
+            doc.setFontSize(16);
+            doc.text('Báo cáo xuất kho', 14, 18);
+            doc.setFontSize(11);
+            doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
+            doc.text(`Tổng phiếu: ${totalExports}`, 14, 32);
+            doc.text(`Tổng giá trị: ${formatCurrency(totalValue)} đ`, 80, 32);
+
+            const rows = buildExportRows().map(row => [
+                row.STT,
+                row['Mã phiếu'],
+                row['Loại phiếu'],
+                row['Đích đến'],
+                row['Ngày xuất'],
+                formatCurrency(row['Tổng giá trị']),
+                row['Trạng thái'],
+            ]);
+
+            autoTable(doc, {
+                head: [['STT', 'Mã phiếu', 'Loại', 'Đích đến', 'Ngày xuất', 'Tổng giá trị', 'Trạng thái']],
+                body: rows,
+                startY: 38,
+                styles: { font: 'Roboto', fontSize: 9 },
+                headStyles: { fillColor: [0, 70, 255], font: 'Roboto' },
+            });
+
+            const date = new Date().toISOString().split('T')[0];
+            doc.save(`bao-cao-xuat-kho-${date}.pdf`);
+        } catch (err) {
+            console.error('Export PDF failed', err);
+            alert('Xuất PDF thất bại, vui lòng thử lại.');
+        }
     };
 
     // Calculate statistics
@@ -204,7 +371,7 @@ export default function ExportReportPage() {
             <main className="ml-[377px] mt-[113px] p-6 pr-12">
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-800">Báo cáo xuất kho</h1>
-                    <p className="text-gray-600 mt-1">Thống kê và báo cáo các phiếu xuất kho cho nhà cung cấp</p>
+                    <p className="text-gray-600 mt-1">Thống kê và báo cáo các phiếu xuất kho từ tất cả nguồn (NCC, Nội bộ, NVBH)</p>
                 </div>
 
                 {/* Filter Section */}
@@ -224,7 +391,21 @@ export default function ExportReportPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Nhà cung cấp</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Loại nguồn</label>
+                            <select
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value as any)}
+                                className="w-full px-4 py-2 bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="ALL">Tất cả</option>
+                                <option value="NCC">Nhà cung cấp</option>
+                                <option value="INTERNAL">Nội bộ</option>
+                                <option value="NVBH">NVBH</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Đích đến</label>
                             <select
                                 value={filterSupplier}
                                 onChange={(e) => setFilterSupplier(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
@@ -390,21 +571,22 @@ export default function ExportReportPage() {
                     <table className="w-full">
                         <thead>
                             <tr className="bg-[#0046ff] text-white h-[48px]">
-                                <th className="px-4 text-center font-bold text-sm w-[80px]">STT</th>
-                                <th className="px-4 text-center font-bold text-sm w-[150px]">Mã phiếu</th>
-                                <th className="px-4 text-center font-bold text-sm w-[200px]">
+                                <th className="px-4 text-center font-bold text-sm w-[60px]">STT</th>
+                                <th className="px-4 text-center font-bold text-sm w-[120px]">Mã phiếu</th>
+                                <th className="px-4 text-center font-bold text-sm w-[100px]">Loại</th>
+                                <th className="px-4 text-center font-bold text-sm w-[180px]">
                                     <button
                                         onClick={handleSortSupplier}
                                         className="flex items-center justify-center gap-2 w-full hover:bg-white/10 py-2 rounded transition-colors"
                                     >
-                                        Nhà cung cấp
+                                        Đích đến
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
                                             <path d="M8 3L11 7H5L8 3Z" opacity={sortSupplier === 'asc' ? 1 : 0.4} />
                                             <path d="M8 13L5 9H11L8 13Z" opacity={sortSupplier === 'desc' ? 1 : 0.4} />
                                         </svg>
                                     </button>
                                 </th>
-                                <th className="px-4 text-center font-bold text-sm w-[150px]">
+                                <th className="px-4 text-center font-bold text-sm w-[120px]">
                                     <button
                                         onClick={handleSortDate}
                                         className="flex items-center justify-center gap-2 w-full hover:bg-white/10 py-2 rounded transition-colors"
@@ -435,7 +617,7 @@ export default function ExportReportPage() {
                         <tbody>
                             {currentData.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="text-center py-8 text-gray-500">
+                                    <td colSpan={8} className="text-center py-8 text-gray-500">
                                         {loading ? 'Đang tải dữ liệu...' : 'Không có dữ liệu'}
                                     </td>
                                 </tr>
@@ -450,6 +632,18 @@ export default function ExportReportPage() {
                                         </td>
                                         <td className="px-4 text-center text-sm font-medium">
                                             {record.code}
+                                        </td>
+                                        <td className="px-4 text-center">
+                                            <span
+                                                className={`inline-block px-2 py-1 rounded text-xs font-medium ${record.exportType === 'NCC'
+                                                    ? 'bg-orange-100 text-orange-800'
+                                                    : record.exportType === 'INTERNAL'
+                                                        ? 'bg-purple-100 text-purple-800'
+                                                        : 'bg-pink-100 text-pink-800'
+                                                    }`}
+                                            >
+                                                {record.exportType === 'NCC' ? 'NCC' : record.exportType === 'INTERNAL' ? 'Nội bộ' : 'NVBH'}
+                                            </span>
                                         </td>
                                         <td className="px-4 text-left text-sm">
                                             {record.supplierName || '-'}
@@ -478,11 +672,14 @@ export default function ExportReportPage() {
                                         </td>
                                         <td className="px-4 text-center">
                                             <button
-                                                onClick={() =>
-                                                    router.push(
-                                                        `/dashboard/products/export/view-export-receipt/${record.id}`,
-                                                    )
-                                                }
+                                                onClick={() => {
+                                                    const url = record.exportType === 'NCC'
+                                                        ? `/dashboard/products/export/view-export-receipt/${record.id}`
+                                                        : record.exportType === 'INTERNAL'
+                                                            ? `/orders/export/view-internal-export-receipt/${record.id}`
+                                                            : `/dashboard/products/export-nvbh/view-export-nvbh-receipt/${record.id}`;
+                                                    router.push(url);
+                                                }}
                                                 className="hover:scale-110 transition-transform"
                                                 title="Xem chi tiết"
                                             >

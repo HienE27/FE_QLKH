@@ -548,6 +548,29 @@ export default function Sidebar() {
           )}
         </div>
 
+        <div className="h-px bg-gray-200 my-2"></div>
+
+        {/* AI Assistant */}
+        <Link
+          href="/ai"
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all group mb-1.5 ${
+            pathname === '/ai'
+              ? 'bg-gradient-to-r from-sky-500 to-sky-600 text-white shadow-lg scale-[1.02]'
+              : 'hover:bg-sky-50'
+          }`}
+        >
+          <div className="w-5 h-5 rounded bg-gradient-to-br from-sky-100 to-sky-200 flex items-center justify-center flex-shrink-0">
+            <span className="text-[11px] font-semibold text-sky-700">AI</span>
+          </div>
+          <span
+            className={`flex-1 text-sm font-semibold ${
+              pathname === '/ai' ? 'text-white' : 'text-[#0b08ab] group-hover:text-blue-700'
+            }`}
+          >
+            Trợ lý AI
+          </span>
+        </Link>
+
       </nav>
     </aside>
   );

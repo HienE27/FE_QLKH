@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
-import Pagination from '@/components/common/Pagination';
-import { usePagination } from '@/hooks/usePagination';
+import { ensureVnFont } from '@/lib/pdf';
 import { getProducts } from '@/services/product.service';
+import { getOrders } from '@/services/order.service';
+import { aiInventoryForecast } from '@/services/ai.service';
 import type { Product } from '@/types/product';
+import type { Order } from '@/types/order';
 
 const formatCurrency = (value: number) =>
     value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
@@ -18,6 +20,8 @@ export default function InventoryReportPage() {
     const [filteredData, setFilteredData] = useState<Product[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
 
     // Filter states
     const [filterCode, setFilterCode] = useState('');
@@ -179,12 +183,90 @@ export default function InventoryReportPage() {
         setSortValue('none');
     };
 
-    const handleExportExcel = () => {
-        alert('Chức năng xuất Excel đang được phát triển');
+    const getStockStatusLabel = (quantity: number) => {
+        if (quantity === 0) return 'Hết hàng';
+        if (quantity <= 10) return 'Sắp hết';
+        return 'Còn hàng';
     };
 
-    const handleExportPDF = () => {
-        alert('Chức năng xuất PDF đang được phát triển');
+    const buildExportRows = () =>
+        filteredData.map((item, index) => {
+            const quantity = item.quantity || 0;
+            const unitPrice = item.unitPrice || 0;
+            const value = quantity * unitPrice;
+            return {
+                STT: index + 1,
+                'Mã hàng': item.code,
+                'Tên hàng hóa': item.name,
+                'Số lượng': quantity,
+                'Đơn giá': unitPrice,
+                'Giá trị tồn': value,
+                'Tình trạng': getStockStatusLabel(quantity),
+            };
+        });
+
+    const handleExportExcel = async () => {
+        try {
+            if (!filteredData.length) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+            const XLSX = await import('xlsx');
+            const rows = buildExportRows();
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Bao_cao_ton_kho');
+            const date = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(workbook, `bao-cao-ton-kho-${date}.xlsx`);
+        } catch (err) {
+            console.error('Export Excel failed', err);
+            alert('Xuất Excel thất bại, vui lòng thử lại.');
+        }
+    };
+
+    const handleExportPDF = async () => {
+        try {
+            if (!filteredData.length) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+            const { default: jsPDF } = await import('jspdf');
+            const autoTable = (await import('jspdf-autotable')).default;
+            const doc = new jsPDF({ orientation: 'landscape' });
+
+            await ensureVnFont(doc);
+
+            doc.setFontSize(16);
+            doc.text('Báo cáo tồn kho', 14, 18);
+            doc.setFontSize(11);
+            doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
+            doc.text(`Tổng mặt hàng: ${totalProducts}`, 14, 32);
+            doc.text(`Tổng giá trị: ${formatCurrency(totalValue)} đ`, 80, 32);
+
+            const rows = buildExportRows().map(row => [
+                row.STT,
+                row['Mã hàng'],
+                row['Tên hàng hóa'],
+                formatCurrency(row['Số lượng']),
+                formatCurrency(row['Đơn giá']),
+                formatCurrency(row['Giá trị tồn']),
+                row['Tình trạng'],
+            ]);
+
+            autoTable(doc, {
+                head: [['STT', 'Mã hàng', 'Tên hàng hóa', 'Số lượng', 'Đơn giá', 'Giá trị tồn', 'Tình trạng']],
+                body: rows,
+                startY: 38,
+                styles: { font: 'Roboto', fontSize: 9 },
+                headStyles: { fillColor: [0, 70, 255], font: 'Roboto' },
+            });
+
+            const date = new Date().toISOString().split('T')[0];
+            doc.save(`bao-cao-ton-kho-${date}.pdf`);
+        } catch (err) {
+            console.error('Export PDF failed', err);
+            alert('Xuất PDF thất bại, vui lòng thử lại.');
+        }
     };
 
     // Calculate statistics
@@ -404,8 +486,89 @@ export default function InventoryReportPage() {
                     </div>
                 </div>
 
-                {/* Export Buttons */}
-                <div className="flex justify-end gap-3 mb-6">
+                {/* Export Buttons + AI Forecast */}
+                <div className="flex justify-between items-center gap-3 mb-6">
+                    <div className="max-w-xl">
+                        <p className="text-sm font-semibold text-gray-800 mb-1">
+                            AI dự báo tồn kho
+                        </p>
+                        <p className="text-xs text-gray-500 mb-2">
+                            Gửi danh sách hàng hiện tại cho AI để gợi ý SKU sắp thiếu / dư hàng.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!filteredData.length) {
+                                    alert('Không có dữ liệu tồn kho để phân tích.');
+                                    return;
+                                }
+                                setAiLoading(true);
+                                setAiSuggestion(null);
+                                try {
+                                    // Lấy dữ liệu orders để tính avgDailySales
+                                    let orders: Order[] = [];
+                                    try {
+                                        orders = await getOrders();
+                                    } catch (err) {
+                                        console.warn('Không thể lấy dữ liệu orders:', err);
+                                    }
+
+                                    // Tính toán avgDailySales cho mỗi sản phẩm
+                                    const now = new Date();
+                                    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                                    
+                                    // Đếm số lượng bán trong 7 ngày qua theo product code
+                                    const salesByProduct = new Map<string, number>();
+                                    orders.forEach(order => {
+                                        const orderDate = new Date(order.createdAt || order.orderDate || '');
+                                        if (orderDate >= sevenDaysAgo) {
+                                            order.items?.forEach(item => {
+                                                const productCode = item.productCode || item.product?.code;
+                                                if (productCode) {
+                                                    const current = salesByProduct.get(productCode) || 0;
+                                                    salesByProduct.set(productCode, current + (item.quantity || 0));
+                                                }
+                                            });
+                                        }
+                                    });
+
+                                    // Tính avgDailySales = tổng bán trong 7 ngày / 7
+                                    const items = filteredData.slice(0, 50).map(p => {
+                                        const totalSales7Days = salesByProduct.get(p.code) || 0;
+                                        const avgDailySales = totalSales7Days > 0 ? totalSales7Days / 7 : undefined;
+                                        return {
+                                            code: p.code,
+                                            name: p.name,
+                                            quantity: p.quantity || 0,
+                                            avgDailySales,
+                                        };
+                                    });
+
+                                    const data = await aiInventoryForecast(items);
+                                    setAiSuggestion(data.recommendation);
+                                } catch (err) {
+                                    console.error('AI inventory forecast client error:', err);
+                                    alert(
+                                        err instanceof Error
+                                            ? err.message
+                                            : 'Có lỗi khi gọi AI.',
+                                    );
+                                } finally {
+                                    setAiLoading(false);
+                                }
+                            }}
+                            disabled={aiLoading}
+                            className="px-4 py-2 rounded-md bg-sky-600 text-white text-xs font-medium hover:bg-sky-700 disabled:opacity-60"
+                        >
+                            {aiLoading ? 'Đang phân tích...' : 'Xin gợi ý từ AI'}
+                        </button>
+                        {aiSuggestion && (
+                            <div className="mt-2 max-h-40 overflow-y-auto text-xs text-gray-700 bg-sky-50 border border-sky-100 rounded-md p-2 whitespace-pre-wrap">
+                                {aiSuggestion}
+                            </div>
+                        )}
+                    </div>
+
                     <button
                         onClick={handleExportExcel}
                         className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors flex items-center gap-2"

@@ -19,6 +19,7 @@ import { getSuppliers, type Supplier } from '@/services/supplier.service';
 
 // 👉 import Units
 import { getUnits, type Unit } from '@/services/unit.service';
+import { aiProductDescription } from '@/services/ai.service';
 
 // Bỏ dấu . , khoảng trắng rồi convert sang số
 function parseMoney(input: string): number {
@@ -60,6 +61,17 @@ export default function CreateProductPage() {
 
   // 👉 danh sách Units từ BE
   const [units, setUnits] = useState<Unit[]>([]);
+
+  // AI mô tả sản phẩm
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiDescriptions, setAiDescriptions] = useState<{
+    short?: string;
+    seo?: string;
+    long?: string;
+    attributes?: string[];
+  } | null>(null);
+  const [selectedDescriptionType, setSelectedDescriptionType] = useState<'short' | 'seo' | 'long'>('long');
 
   useEffect(() => {
     let cancelled = false;
@@ -452,7 +464,7 @@ export default function CreateProductPage() {
               />
             </div>
 
-            {/* Mô tả */}
+            {/* Mô tả + AI gợi ý */}
             <div className="grid grid-cols-3 gap-4 items-start">
               <label
                 htmlFor="description"
@@ -460,13 +472,138 @@ export default function CreateProductPage() {
               >
                 Mô tả
               </label>
-              <textarea
-                id="description"
-                className="col-span-2 px-4 py-2 border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
-                placeholder="Nhập mô tả sản phẩm"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+              <div className="col-span-2 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500">
+                    Có thể nhập tay hoặc để AI gợi ý mô tả (3 phiên bản).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!name.trim()) {
+                        setAiError('Vui lòng nhập tên hàng hóa trước khi gọi AI.');
+                        return;
+                      }
+                      setAiError(null);
+                      setAiLoading(true);
+                      try {
+                        const data = await aiProductDescription(name);
+                        setAiDescriptions({
+                          short: data.shortDescription,
+                          seo: data.seoDescription,
+                          long: data.longDescription,
+                          attributes: data.attributes,
+                        });
+                        // Mặc định chọn long description
+                        setDescription(data.longDescription || data.seoDescription || data.shortDescription || '');
+                        setSelectedDescriptionType('long');
+                      } catch (err) {
+                        console.error('AI mô tả sản phẩm lỗi:', err);
+                        setAiError(
+                          err instanceof Error ? err.message : 'Có lỗi khi gọi AI.',
+                        );
+                      } finally {
+                        setAiLoading(false);
+                      }
+                    }}
+                    disabled={aiLoading}
+                    className="px-3 py-1 rounded-md text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    {aiLoading ? 'Đang sinh mô tả...' : 'Gợi ý mô tả bằng AI'}
+                  </button>
+                </div>
+
+                {/* Hiển thị 3 phiên bản nếu có */}
+                {aiDescriptions && (
+                  <div className="border border-sky-200 rounded-md p-3 bg-sky-50 space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDescriptionType('short');
+                          setDescription(aiDescriptions.short || '');
+                        }}
+                        className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                          selectedDescriptionType === 'short'
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-sky-100'
+                        }`}
+                      >
+                        Ngắn
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDescriptionType('seo');
+                          setDescription(aiDescriptions.seo || '');
+                        }}
+                        className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                          selectedDescriptionType === 'seo'
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-sky-100'
+                        }`}
+                      >
+                        SEO
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDescriptionType('long');
+                          setDescription(aiDescriptions.long || '');
+                        }}
+                        className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                          selectedDescriptionType === 'long'
+                            ? 'bg-sky-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-sky-100'
+                        }`}
+                      >
+                        Chi tiết
+                      </button>
+                    </div>
+                    <div className="text-xs text-gray-600 space-y-1">
+                      {selectedDescriptionType === 'short' && aiDescriptions.short && (
+                        <p className="font-medium">Mô tả ngắn:</p>
+                      )}
+                      {selectedDescriptionType === 'seo' && aiDescriptions.seo && (
+                        <p className="font-medium">Mô tả SEO:</p>
+                      )}
+                      {selectedDescriptionType === 'long' && aiDescriptions.long && (
+                        <p className="font-medium">Mô tả chi tiết:</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Gợi ý attributes */}
+                {aiDescriptions?.attributes && aiDescriptions.attributes.length > 0 && (
+                  <div className="border border-amber-200 rounded-md p-3 bg-amber-50">
+                    <p className="text-xs font-medium text-amber-800 mb-2">
+                      Gợi ý thuộc tính (attributes):
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {aiDescriptions.attributes.map((attr, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-1 bg-white border border-amber-300 rounded text-xs text-amber-900"
+                        >
+                          {attr}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <textarea
+                  id="description"
+                  className="w-full px-4 py-2 border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                  placeholder="Nhập hoặc chỉnh sửa mô tả sản phẩm"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+                {aiError && (
+                  <p className="text-xs text-red-600">{aiError}</p>
+                )}
+              </div>
             </div>
 
             {/* Hình ảnh */}
