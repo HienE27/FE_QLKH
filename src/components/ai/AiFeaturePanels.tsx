@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import {
@@ -16,19 +17,278 @@ import {
 const trendOptions: Array<'WEEKLY' | 'MONTHLY' | 'QUARTERLY'> = ['WEEKLY', 'MONTHLY', 'QUARTERLY'];
 const reportTypes: ReportRequest['reportType'][] = ['INVENTORY', 'SALES', 'IMPORT_EXPORT', 'ALL'];
 const reportPeriods: ReportRequest['period'][] = ['DAILY', 'WEEKLY', 'MONTHLY'];
+const reportTypeLabels: Record<ReportRequest['reportType'], string> = {
+  INVENTORY: 'Tồn kho',
+  SALES: 'Doanh số',
+  IMPORT_EXPORT: 'Nhập/Xuất',
+  ALL: 'Tổng hợp',
+};
+const reportPeriodLabels: Record<ReportRequest['period'], string> = {
+  DAILY: 'Theo ngày',
+  WEEKLY: 'Theo tuần',
+  MONTHLY: 'Theo tháng',
+};
 
 function formatCurrency(value: number) {
   return value.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 }
 
 const COLOR_FUNCTION_REGEX =
-  /(background-)?color:\s*[^;]*(lab|lch|oklab|oklch)\([^)]+\)[^;]*;?/gi;
+  /(background-)?(color|border-color|outline-color|fill|stroke):\s*[^;]*(lab|lch|oklab|oklch)\([^)]+\)[^;]*;?/gi;
 const RAW_COLOR_FUNCTION_REGEX = /(lab|lch|oklab|oklch)\([^)]+\)/gi;
+const COLOR_MIX_REGEX = /color-mix\(\s*in\s+(?:lab|lch|oklab|oklch)[^)]+\)/gi;
+const STYLE_TAG_REGEX = /<style[\s\S]*?>[\s\S]*?<\/style>/gi;
+const BASE_EXPORT_STYLE = `
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&display=swap');
+    :root {
+      font-family: 'Be Vietnam Pro', 'Segoe UI', Arial, sans-serif;
+      color: #1f2937;
+    }
+    body { margin: 0; padding: 0; background: #ffffff; }
+    h1, h2, h3, h4, h5 { color: #111827; margin-bottom: 8px; }
+    p, span, li { color: #374151; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 12px 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 6px; }
+    th { background: #f3f4f6; font-weight: 600; }
+    .report-wrapper { padding: 32px; max-width: 720px; margin: 0 auto; }
+    .report-article { display: flex; flex-direction: column; gap: 16px; }
+    .report-section { margin-top: 12px; }
+    .report-header h1 { margin: 4px 0; font-size: 24px; }
+    .report-meta { font-size: 13px; color: #6b7280; }
+    .report-summary { padding: 12px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; }
+    ul { padding-left: 18px; }
+    ul li { margin-bottom: 4px; }
+    .chart-grid { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+    .chart-item { display: flex; flex-direction: column; gap: 4px; }
+    .chart-label { font-size: 13px; color: #111827; font-weight: 500; }
+    .chart-bar { position: relative; width: 100%; height: 16px; background: #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .chart-bar-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #38bdf8, #2563eb); }
+    .chart-bar-value { font-size: 12px; color: #4b5563; margin-top: 2px; }
+  </style>
+`;
 
 function sanitizeHtmlContent(html: string) {
   return html
-    .replace(COLOR_FUNCTION_REGEX, (_, prefix) => `${prefix ? `${prefix}` : ''}color:#1f2937;`)
-    .replace(RAW_COLOR_FUNCTION_REGEX, '#1f2937');
+    .replace(COLOR_FUNCTION_REGEX, (_, prefix = '', property = '') => `${prefix ?? ''}${property}:#1f2937;`)
+    .replace(RAW_COLOR_FUNCTION_REGEX, '#1f2937')
+    .replace(COLOR_MIX_REGEX, '#1f2937')
+    .replace(STYLE_TAG_REGEX, '');
+}
+
+function enhanceTextCharts(html: string) {
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') return html;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+    const headings = Array.from(doc.querySelectorAll('h2, h3, h4')).filter((el) =>
+      (el.textContent || '').toLowerCase().includes('text-based'),
+    );
+
+    headings.forEach((heading) => {
+      const rows: Array<{ label: string; value: number }> = [];
+      const removable: Element[] = [];
+      let node = heading.nextElementSibling;
+
+      while (node && !/^H[1-6]$/.test(node.tagName)) {
+        const text = node.textContent?.trim();
+        if (!text || text.length === 0) {
+          removable.push(node);
+          node = node.nextElementSibling;
+          continue;
+        }
+        const match = text.match(/^([^:]+):.*?(\d+)\)?$/u);
+        if (match) {
+          rows.push({ label: match[1].trim(), value: Number(match[2]) });
+          removable.push(node);
+          node = node.nextElementSibling;
+          continue;
+        }
+        // Stop when encountering paragraph/table that isn't part of the chart
+        break;
+      }
+
+      if (!rows.length) return;
+      removable.forEach((el) => el.remove());
+
+      const maxValue = Math.max(...rows.map((row) => row.value), 1);
+      const container = doc.createElement('div');
+      container.className = 'chart-grid';
+
+      rows.forEach((row) => {
+        const item = doc.createElement('div');
+        item.className = 'chart-item';
+
+        const label = doc.createElement('div');
+        label.className = 'chart-label';
+        label.textContent = `${row.label} (${row.value})`;
+
+        const bar = doc.createElement('div');
+        bar.className = 'chart-bar';
+
+        const fill = doc.createElement('span');
+        fill.className = 'chart-bar-fill';
+        fill.style.width = `${Math.max((row.value / maxValue) * 100, 8)}%`;
+
+        bar.appendChild(fill);
+        item.appendChild(label);
+        item.appendChild(bar);
+        container.appendChild(item);
+      });
+
+      heading.insertAdjacentElement('afterend', container);
+    });
+
+    return doc.body.innerHTML;
+  } catch (error) {
+    console.warn('enhanceTextCharts error', error);
+    return html;
+  }
+}
+
+function parseBulletList(content?: string) {
+  if (!content) return [];
+  return content
+    .replace(/<\/?[^>]+>/g, '\n')
+    .split(/\r?\n|•/u)
+    .map((entry) => entry.replace(/^[\s•\-–]+/, '').trim())
+    .filter(Boolean);
+}
+
+function buildReportHtmlDocument(bodyHtml: string) {
+  return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8" />${BASE_EXPORT_STYLE}</head><body><div class="report-wrapper">${bodyHtml}</div></body></html>`;
+}
+
+function buildReportBody({
+  title,
+  period,
+  summary,
+  generatedHtml,
+  highlights,
+  recommendations,
+}: {
+  title?: string;
+  period?: ReportRequest['period'];
+  summary?: string;
+  generatedHtml?: string;
+  highlights?: string;
+  recommendations?: string;
+}) {
+  const highlightSection = buildBulletSection('Điểm nổi bật', highlights);
+  const recommendationSection = buildBulletSection('Khuyến nghị', recommendations);
+
+  return `
+    <article class="report-article">
+      <header class="report-header">
+        <p class="report-meta">BÁO CÁO AI • ${translatePeriod(period)}</p>
+        <h1>${title ?? 'Báo cáo AI'}</h1>
+        <p class="report-meta">Ngày tạo: ${new Date().toLocaleDateString('vi-VN')}</p>
+      </header>
+      ${summary ? `<section class="report-section report-summary"><p>${summary}</p></section>` : ''}
+      <section class="report-section">${generatedHtml ?? ''}</section>
+      ${highlightSection}
+      ${recommendationSection}
+    </article>
+  `;
+}
+
+function buildBulletSection(label: string, content?: string) {
+  const items = parseBulletList(content);
+  if (!items.length) return '';
+  return `
+    <section class="report-section">
+      <h3>${label}</h3>
+      <ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>
+    </section>
+  `;
+}
+
+function translatePeriod(period?: ReportRequest['period']) {
+  switch (period) {
+    case 'DAILY':
+      return 'Theo ngày';
+    case 'WEEKLY':
+      return 'Theo tuần';
+    case 'MONTHLY':
+      return 'Theo tháng';
+    default:
+      return 'Chu kỳ linh hoạt';
+  }
+}
+
+function buildExcelWorkbook(report: ReportResponse, period?: ReportRequest['period']) {
+  const workbook = XLSX.utils.book_new();
+  const summaryRows: Array<Array<string>> = [
+    ['Tiêu đề', report.title ?? 'Báo cáo AI'],
+    ['Chu kỳ', translatePeriod(period)],
+    ['Ngày tạo', new Date().toLocaleDateString('vi-VN')],
+  ];
+  if (report.summary) {
+    summaryRows.push(['Tóm tắt', report.summary]);
+  }
+
+  const highlights = parseBulletList(report.highlights);
+  if (highlights.length) {
+    summaryRows.push(['Điểm nổi bật', '']);
+    highlights.forEach((item, idx) => summaryRows.push([`- ${idx + 1}`, item]));
+  }
+
+  const recommendations = parseBulletList(report.recommendations);
+  if (recommendations.length) {
+    summaryRows.push(['Khuyến nghị', '']);
+    recommendations.forEach((item, idx) => summaryRows.push([`- ${idx + 1}`, item]));
+  }
+
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Tong hop');
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${report.htmlContent}</div>`, 'text/html');
+    const tables = doc.querySelectorAll('table');
+    tables.forEach((table, idx) => {
+      const aoa = Array.from(table.rows).map((row) =>
+        Array.from(row.cells).map((cell) => cell.textContent?.trim() ?? ''),
+      );
+      if (aoa.length) {
+        const sheet = XLSX.utils.aoa_to_sheet(aoa);
+        XLSX.utils.book_append_sheet(workbook, sheet, `Bang ${idx + 1}`);
+      }
+    });
+  } catch (error) {
+    console.warn('buildExcelWorkbook error', error);
+  }
+
+  return workbook;
+}
+
+async function createIsolatedExportNode(html: string) {
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.left = '-9999px';
+  iframe.style.top = '0';
+  iframe.style.width = '794px';
+  iframe.style.height = '1123px';
+  iframe.style.background = '#fff';
+  document.body.appendChild(iframe);
+
+  const ready = new Promise<void>((resolve, reject) => {
+    iframe.onload = () => resolve();
+    iframe.onerror = () => reject(new Error('Không load được iframe export'));
+  });
+
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) {
+    document.body.removeChild(iframe);
+    throw new Error('Không thể tạo iframe cho export');
+  }
+
+  doc.open();
+  doc.write(buildReportHtmlDocument(html));
+  doc.close();
+
+  await ready;
+  return iframe;
 }
 
 export default function AiFeaturePanels() {
@@ -85,9 +345,10 @@ export default function AiFeaturePanels() {
     setReportLoading(true);
     try {
       const data = await generateReport(reportRequest);
+      const normalizedContent = enhanceTextCharts(sanitizeHtmlContent(data.htmlContent));
       setReportData({
         ...data,
-        htmlContent: sanitizeHtmlContent(data.htmlContent),
+        htmlContent: normalizedContent,
       });
     } catch (error) {
       console.error(error);
@@ -96,15 +357,26 @@ export default function AiFeaturePanels() {
     }
   };
 
+  const exportBody = useMemo(() => {
+    if (!reportData) return '';
+    return buildReportBody({
+      title: reportData.title,
+      period: reportRequest.period,
+      summary: reportData.summary,
+      generatedHtml: reportData.htmlContent,
+      highlights: reportData.highlights,
+      recommendations: reportData.recommendations,
+    });
+  }, [reportData, reportRequest.period]);
+
   const downloadReport = async (format: 'HTML' | 'PDF' | 'EXCEL') => {
     if (!reportData) return;
 
     const title = reportData.title || 'bao-cao-ai';
 
-    const sanitizedHtml = sanitizeHtmlContent(reportData.htmlContent);
-
-    if (format === 'HTML') {
-      const blob = new Blob([sanitizedHtml], { type: 'text/html;charset=utf-8' });
+    if (format === 'HTML' && exportBody) {
+      const htmlDocument = buildReportHtmlDocument(exportBody);
+      const blob = new Blob([htmlDocument], { type: 'text/html;charset=utf-8' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `${title}.html`;
@@ -112,35 +384,54 @@ export default function AiFeaturePanels() {
       URL.revokeObjectURL(link.href);
     }
 
-    if (format === 'PDF' && reportPreviewRef.current) {
+    if (format === 'PDF' && exportBody) {
       const doc = new jsPDF('p', 'pt', 'a4');
-      await doc.html(reportPreviewRef.current, {
-        html2canvas: {
-          scale: 0.6,
+      const iframe = await createIsolatedExportNode(exportBody);
+      try {
+        const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!frameDoc) throw new Error('Không render được iframe export');
+        const content = frameDoc.querySelector('.report-wrapper') as HTMLElement;
+        if (!content) throw new Error('Không tìm thấy nội dung báo cáo');
+
+        const canvas = await html2canvas(content, {
+          scale: 2,
           logging: false,
-        },
-        callback: () => {
-          doc.save(`${title}.pdf`);
-        },
-        margin: [20, 20, 20, 20],
-      });
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          scrollX: 0,
+          scrollY: 0,
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdfWidth = doc.internal.pageSize.getWidth();
+        const pdfHeight = doc.internal.pageSize.getHeight();
+        const imgProps = {
+          width: canvas.width,
+          height: canvas.height,
+        };
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        doc.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          doc.addPage();
+          doc.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+          heightLeft -= pdfHeight;
+        }
+
+        doc.save(`${title}.pdf`);
+      } finally {
+        document.body.removeChild(iframe);
+      }
     }
 
-    if (format === 'EXCEL' && reportPreviewRef.current) {
-      const table = reportPreviewRef.current.querySelector('table');
-      if (table) {
-        const workbook = XLSX.utils.table_to_book(table as HTMLTableElement, { sheet: 'Report' });
-        XLSX.writeFile(workbook, `${title}.xlsx`);
-      } else {
-        const worksheet = XLSX.utils.aoa_to_sheet([
-          ['Title', reportData.title],
-          ['Summary', reportData.summary],
-          ['Highlights', reportData.highlights],
-        ]);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
-        XLSX.writeFile(workbook, `${title}.xlsx`);
-      }
+    if (format === 'EXCEL') {
+      const workbook = buildExcelWorkbook(reportData, reportRequest.period);
+      XLSX.writeFile(workbook, `${title}.xlsx`);
     }
   };
 
@@ -308,7 +599,7 @@ export default function AiFeaturePanels() {
                       : 'border-gray-200 text-gray-600 hover:border-purple-200'
                   }`}
                 >
-                  {type}
+                  {reportTypeLabels[type]}
                 </button>
               ))}
             </div>
@@ -326,7 +617,7 @@ export default function AiFeaturePanels() {
                       : 'border-gray-200 text-gray-600 hover:border-pink-200'
                   }`}
                 >
-                  {period}
+                  {reportPeriodLabels[period]}
                 </button>
               ))}
             </div>
@@ -337,6 +628,14 @@ export default function AiFeaturePanels() {
               disabled={reportLoading}
             >
               {reportLoading ? 'Đang tạo...' : 'Tạo báo cáo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleReport()}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-60"
+              disabled={reportLoading || !reportData}
+            >
+              Làm mới dữ liệu
             </button>
             <select
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
@@ -383,7 +682,7 @@ export default function AiFeaturePanels() {
               <div
                 ref={reportPreviewRef}
                 className="prose prose-sm max-w-none bg-gray-50 border border-gray-100 rounded-lg p-3"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(reportData.htmlContent) }}
+                dangerouslySetInnerHTML={{ __html: reportData.htmlContent }}
               />
               <p className="text-sm text-gray-600 mt-3">{reportData.recommendations}</p>
             </div>

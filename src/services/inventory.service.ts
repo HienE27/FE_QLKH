@@ -145,8 +145,9 @@ export async function createSupplierExport(
 /* Lấy chi tiết phiếu xuất NCC */
 export async function getSupplierExportById(
     id: number,
+    options?: { includeDetails?: boolean },
 ): Promise<SupplierExport> {
-    const url = `${API_BASE}/api/exports/suppliers/${id}`;
+    const url = `${API_BASE}/api/exports/suppliers/${id}${options?.includeDetails !== false ? '?includeDetails=true' : ''}`;
 
     const token = getToken();
     const headers: HeadersInit = { "Content-Type": "application/json" };
