@@ -10,24 +10,69 @@ interface PieChartProps {
 }
 
 export default function PieChart({ data, size = 200 }: PieChartProps) {
-    const total = data.reduce((sum, item) => sum + item.value, 0);
+    // Filter out invalid data
+    const validData = data.filter(item => item.value > 0 && !isNaN(item.value));
+    const total = validData.reduce((sum, item) => sum + item.value, 0);
 
-    if (total === 0) {
+    if (total === 0 || validData.length === 0) {
         return (
-            <div className="flex items-center justify-center" style={{ width: size, height: size }}>
-                <p className="text-gray-400 text-sm">Không có dữ liệu</p>
+            <div className="flex flex-col items-center justify-center gap-2" style={{ width: size, height: size }}>
+                <p className="text-gray-400 text-sm font-medium">Không có dữ liệu</p>
+                <p className="text-gray-300 text-xs">Vui lòng thử lại sau</p>
+            </div>
+        );
+    }
+
+    const radius = size / 2 - 10;
+    const centerX = size / 2;
+    const centerY = size / 2;
+
+    // Special case: only one item (100%) - draw a full circle
+    if (validData.length === 1) {
+        const item = validData[0];
+        return (
+            <div className="flex flex-col items-center gap-4">
+                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                    <circle
+                        cx={centerX}
+                        cy={centerY}
+                        r={radius}
+                        fill={item.color}
+                        stroke="white"
+                        strokeWidth="2"
+                        className="transition-opacity hover:opacity-80 cursor-pointer"
+                    />
+                </svg>
+
+                <div className="flex flex-col gap-2 w-full">
+                    <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                            <div
+                                className="w-3 h-3 rounded-sm"
+                                style={{ backgroundColor: item.color }}
+                            />
+                            <span className="text-gray-700">{item.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-800">{item.value}</span>
+                            <span className="text-gray-500">(100.0%)</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }
 
     let currentAngle = -90; // Start from top
-    const radius = size / 2 - 10;
-    const centerX = size / 2;
-    const centerY = size / 2;
 
-    const slices = data.map((item) => {
+    const slices = validData.map((item) => {
         const percentage = (item.value / total) * 100;
-        const angle = (item.value / total) * 360;
+        let angle = (item.value / total) * 360;
+
+        // Prevent 360 degree angle issues
+        if (angle >= 359.99) {
+            angle = 359.99;
+        }
 
         const startAngle = currentAngle;
         const endAngle = currentAngle + angle;

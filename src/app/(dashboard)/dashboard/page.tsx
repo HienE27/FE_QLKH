@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -30,6 +30,8 @@ export default function DashboardPage() {
   const [totalExportValue, setTotalExportValue] = useState(0);
   const [pendingImports, setPendingImports] = useState(0);
   const [pendingExports, setPendingExports] = useState(0);
+  const [importedCount, setImportedCount] = useState(0);
+  const [exportedCount, setExportedCount] = useState(0);
 
   // Recent activities
   const [recentImports, setRecentImports] = useState<any[]>([]);
@@ -72,44 +74,74 @@ export default function DashboardPage() {
 
       // Import statistics
       setTotalImports(imports.length);
-      const importValue = imports
-        .filter(i => i.status === 'IMPORTED')
-        .reduce((sum, i) => sum + i.totalValue, 0);
+      const importedItems = imports.filter(i => i.status === 'IMPORTED');
+      const importValue = importedItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
       setTotalImportValue(importValue);
+      setImportedCount(importedItems.length);
       const pendingImp = imports.filter(i => i.status === 'PENDING').length;
       setPendingImports(pendingImp);
 
       // Recent imports (last 5)
       const sortedImports = [...imports]
-        .sort((a, b) => new Date(b.importsDate).getTime() - new Date(a.importsDate).getTime())
+        .sort((a, b) => {
+          const dateA = new Date(a.importsDate || a.orderDate || 0).getTime();
+          const dateB = new Date(b.importsDate || b.orderDate || 0).getTime();
+          return dateB - dateA;
+        })
         .slice(0, 5);
       setRecentImports(sortedImports);
 
       // Export statistics
       setTotalExports(exports.length);
-      const exportValue = exports
-        .filter(e => e.status === 'EXPORTED')
-        .reduce((sum, e) => sum + e.totalValue, 0);
+      const exportedItems = exports.filter(e => e.status === 'EXPORTED');
+      const exportValue = exportedItems.reduce((sum, e) => sum + (e.totalValue || 0), 0);
       setTotalExportValue(exportValue);
+      setExportedCount(exportedItems.length);
       const pendingExp = exports.filter(e => e.status === 'PENDING').length;
       setPendingExports(pendingExp);
 
       // Recent exports (last 5)
       const sortedExports = [...exports]
-        .sort((a, b) => new Date(b.exportsDate).getTime() - new Date(a.exportsDate).getTime())
+        .sort((a, b) => {
+          const dateA = new Date(a.exportsDate || a.orderDate || 0).getTime();
+          const dateB = new Date(b.exportsDate || b.orderDate || 0).getTime();
+          return dateB - dateA;
+        })
         .slice(0, 5);
       setRecentExports(sortedExports);
 
     } catch (err) {
       console.error('Error loading dashboard:', err);
+      // Set default values to prevent crashes
+      setTotalProducts(0);
+      setTotalSuppliers(0);
+      setTotalInventoryValue(0);
+      setLowStockCount(0);
+      setOutOfStockCount(0);
+      setTotalImports(0);
+      setTotalImportValue(0);
+      setTotalExports(0);
+      setTotalExportValue(0);
+      setPendingImports(0);
+      setPendingExports(0);
+      setImportedCount(0);
+      setExportedCount(0);
+      setRecentImports([]);
+      setRecentExports([]);
     } finally {
       setLoading(false);
     }
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('vi-VN');
+    if (!dateStr) return 'N/A';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString('vi-VN');
+    } catch {
+      return 'N/A';
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -118,14 +150,34 @@ export default function DashboardPage() {
       IMPORTED: { label: 'Đã nhập', color: 'bg-green-100 text-green-800' },
       EXPORTED: { label: 'Đã xuất', color: 'bg-blue-100 text-blue-800' },
       CANCELLED: { label: 'Đã hủy', color: 'bg-red-100 text-red-800' },
+      APPROVED: { label: 'Đã duyệt', color: 'bg-green-100 text-green-800' },
+      REJECTED: { label: 'Đã từ chối', color: 'bg-red-100 text-red-800' },
     };
-    const config = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
+    const config = statusMap[status] || { label: status || 'N/A', color: 'bg-gray-100 text-gray-800' };
     return (
       <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${config.color}`}>
         {config.label}
       </span>
     );
   };
+
+  // Memoize chart data to prevent unnecessary re-renders
+  const stockChartData = useMemo(() => {
+    const inStock = Math.max(0, totalProducts - lowStockCount - outOfStockCount);
+    return [
+      { label: 'Còn hàng', value: inStock, color: '#10B981' },
+      { label: 'Sắp hết', value: lowStockCount, color: '#F59E0B' },
+      { label: 'Hết hàng', value: outOfStockCount, color: '#EF4444' },
+    ].filter(item => item.value > 0);
+  }, [totalProducts, lowStockCount, outOfStockCount]);
+
+  const statusChartData = useMemo(() => {
+    return [
+      { label: 'Đã nhập kho', value: importedCount, color: '#3B82F6' },
+      { label: 'Đã xuất kho', value: exportedCount, color: '#F97316' },
+      { label: 'Chờ xử lý', value: pendingImports + pendingExports, color: '#F59E0B' },
+    ].filter(item => item.value > 0);
+  }, [importedCount, exportedCount, pendingImports, pendingExports]);
 
   if (loading) {
     return (
@@ -293,23 +345,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">Tình trạng tồn kho</h3>
             <PieChart
-              data={[
-                {
-                  label: 'Còn hàng',
-                  value: totalProducts - lowStockCount - outOfStockCount,
-                  color: '#10B981',
-                },
-                {
-                  label: 'Sắp hết',
-                  value: lowStockCount,
-                  color: '#F59E0B',
-                },
-                {
-                  label: 'Hết hàng',
-                  value: outOfStockCount,
-                  color: '#EF4444',
-                },
-              ]}
+              data={stockChartData}
               size={220}
             />
           </div>
@@ -318,23 +354,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">Trạng thái phiếu nhập/xuất</h3>
             <PieChart
-              data={[
-                {
-                  label: 'Đã nhập kho',
-                  value: totalImports - pendingImports,
-                  color: '#3B82F6',
-                },
-                {
-                  label: 'Đã xuất kho',
-                  value: totalExports - pendingExports,
-                  color: '#F97316',
-                },
-                {
-                  label: 'Chờ xử lý',
-                  value: pendingImports + pendingExports,
-                  color: '#F59E0B',
-                },
-              ]}
+              data={statusChartData}
               size={220}
             />
           </div>

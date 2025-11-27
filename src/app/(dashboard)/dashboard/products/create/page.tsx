@@ -121,10 +121,15 @@ export default function CreateProductPage() {
         imagePath = await uploadProductImage(imageFile);
       }
 
+      // Cắt ngắn mô tả nếu quá dài (giới hạn 2000 ký tự để an toàn với database)
+      const trimmedDescription = description && description.length > 2000 
+        ? description.substring(0, 2000) + '...' 
+        : description;
+
       const payload: ProductPayload = {
         code,
         name,
-        shortDescription: description,
+        shortDescription: trimmedDescription,
         image: imagePath, // Lưu relative path vào DB
         unitPrice: parseMoney(price),
         quantity: quantity === '' ? 0 : Number(quantity),
