@@ -1,6 +1,7 @@
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
 import AiAssistant from '@/components/ai/AiAssistant';
+import AiFeaturePanels from '@/components/ai/AiFeaturePanels';
 
 export default function AiPage() {
   return (
@@ -119,6 +120,9 @@ export default function AiPage() {
               </div>
             </div>
           </div>
+
+          {/* Advanced feature panels */}
+          <AiFeaturePanels />
 
           {/* Chat Interface */}
           <AiAssistant />

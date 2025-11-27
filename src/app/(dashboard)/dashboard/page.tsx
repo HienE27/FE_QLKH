@@ -8,6 +8,7 @@ import PieChart from '@/components/charts/PieChart';
 import { getProducts } from '@/services/product.service';
 import { getSupplierImports, getSupplierExports } from '@/services/inventory.service';
 import { getSuppliers } from '@/services/supplier.service';
+import { getDashboardAlerts, DashboardAlert } from '@/services/ai.service';
 
 const formatCurrency = (value: number) =>
   value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
@@ -37,9 +38,42 @@ export default function DashboardPage() {
   const [recentImports, setRecentImports] = useState<any[]>([]);
   const [recentExports, setRecentExports] = useState<any[]>([]);
 
+  // AI Alerts
+  const [aiAlerts, setAiAlerts] = useState<DashboardAlert[]>([]);
+  const [aiSummary, setAiSummary] = useState<string>('');
+  const [alertsLoading, setAlertsLoading] = useState(true);
+
   useEffect(() => {
     loadDashboardData();
+    loadAiAlerts();
   }, []);
+
+  const loadAiAlerts = async () => {
+    try {
+      setAlertsLoading(true);
+      const response = await getDashboardAlerts();
+      setAiAlerts(response.alerts || []);
+      setAiSummary(response.summary || '');
+    } catch (err) {
+      console.error('Error loading AI alerts:', err);
+      setAiAlerts([]);
+    } finally {
+      setAlertsLoading(false);
+    }
+  };
+
+  const getAlertStyles = (type: string) => {
+    switch (type) {
+      case 'CRITICAL':
+        return 'bg-red-50 border-red-200 text-red-800';
+      case 'WARNING':
+        return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+      case 'SUCCESS':
+        return 'bg-green-50 border-green-200 text-green-800';
+      default:
+        return 'bg-blue-50 border-blue-200 text-blue-800';
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -272,6 +306,62 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* AI Alerts Section */}
+        {(aiAlerts.length > 0 || alertsLoading) && (
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white text-lg">🤖</span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">Cảnh báo AI</h3>
+              </div>
+              <button 
+                onClick={loadAiAlerts}
+                className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Làm mới
+              </button>
+            </div>
+            
+            {alertsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                <span className="ml-3 text-gray-600">Đang phân tích dữ liệu...</span>
+              </div>
+            ) : (
+              <>
+                {aiSummary && (
+                  <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg">{aiSummary}</p>
+                )}
+                <div className="space-y-3">
+                  {aiAlerts.map((alert, index) => (
+                    <div 
+                      key={index}
+                      className={`flex items-start gap-3 p-4 rounded-lg border ${getAlertStyles(alert.type)} cursor-pointer hover:shadow-md transition-shadow`}
+                      onClick={() => alert.action && router.push(alert.action)}
+                    >
+                      <span className="text-2xl">{alert.icon || '📋'}</span>
+                      <div className="flex-1">
+                        <p className="font-semibold">{alert.title}</p>
+                        <p className="text-sm opacity-90 mt-1">{alert.message}</p>
+                      </div>
+                      {alert.action && (
+                        <svg className="w-5 h-5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Import/Export Statistics */}
         <div className="grid grid-cols-2 gap-6 mb-6">
           {/* Import Stats */}
@@ -430,7 +520,7 @@ export default function DashboardPage() {
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4">Thao tác nhanh</h3>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <button
               onClick={() => router.push('/dashboard/products/import/create-import-receipt')}
               className="flex flex-col items-center justify-center p-6 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
@@ -480,6 +570,16 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <span className="text-sm font-medium text-gray-800">Báo cáo tồn kho</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/ai')}
+              className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 rounded-lg transition-colors group"
+            >
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <span className="text-xl">🤖</span>
+              </div>
+              <span className="text-sm font-medium text-gray-800">Trợ lý AI</span>
             </button>
           </div>
         </div>
