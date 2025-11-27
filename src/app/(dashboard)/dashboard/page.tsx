@@ -75,6 +75,55 @@ export default function DashboardPage() {
     }
   };
 
+  // Map icon names to emoji/icons (Vietnamese-friendly)
+  const getIconDisplay = (iconName?: string, type?: string) => {
+    if (!iconName) {
+      // Default icon based on type
+      switch (type) {
+        case 'CRITICAL':
+          return '⚠️';
+        case 'WARNING':
+          return '⚠️';
+        case 'SUCCESS':
+          return '✅';
+        default:
+          return 'ℹ️';
+      }
+    }
+
+    // Map common icon names to emoji
+    const iconMap: Record<string, string> = {
+      'alert-circle': '⚠️',
+      'alert-triangle': '⚠️',
+      'alert': '⚠️',
+      'package': '📦',
+      'box': '📦',
+      'inventory': '📦',
+      'check-circle': '✅',
+      'check': '✅',
+      'success': '✅',
+      'info': 'ℹ️',
+      'information': 'ℹ️',
+      'exclamation': '❗',
+      'warning': '⚠️',
+      'error': '❌',
+      'critical': '🚨',
+      'low-stock': '📉',
+      'high-stock': '📈',
+      'out-of-stock': '❌',
+    };
+
+    const lowerIcon = iconName.toLowerCase().trim();
+    
+    // If it's already an emoji or special character, return as is
+    if (/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(iconName)) {
+      return iconName;
+    }
+
+    // Return mapped emoji or default
+    return iconMap[lowerIcon] || '📋';
+  };
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -168,13 +217,13 @@ export default function DashboardPage() {
   };
 
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
+    if (!dateStr) return 'Chưa có';
     try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return 'N/A';
-      return date.toLocaleDateString('vi-VN');
+    const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return 'Chưa có';
+    return date.toLocaleDateString('vi-VN');
     } catch {
-      return 'N/A';
+      return 'Chưa có';
     }
   };
 
@@ -187,7 +236,7 @@ export default function DashboardPage() {
       APPROVED: { label: 'Đã duyệt', color: 'bg-green-100 text-green-800' },
       REJECTED: { label: 'Đã từ chối', color: 'bg-red-100 text-red-800' },
     };
-    const config = statusMap[status] || { label: status || 'N/A', color: 'bg-gray-100 text-gray-800' };
+    const config = statusMap[status] || { label: status || 'Không xác định', color: 'bg-gray-100 text-gray-800' };
     return (
       <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${config.color}`}>
         {config.label}
@@ -235,7 +284,7 @@ export default function DashboardPage() {
       <main className="ml-[377px] mt-[113px] p-6 pr-12">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800">Tổng quan</h1>
-          <p className="text-gray-600 mt-1">Dashboard quản lý kho hàng</p>
+          <p className="text-gray-600 mt-1">Bảng điều khiển quản lý kho hàng</p>
         </div>
 
         {/* Main Statistics Cards */}
@@ -308,17 +357,23 @@ export default function DashboardPage() {
 
         {/* AI Alerts Section */}
         {(aiAlerts.length > 0 || alertsLoading) && (
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-lg">🤖</span>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800">Cảnh báo AI</h3>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Cảnh báo AI</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Phân tích thông minh từ hệ thống</p>
+                </div>
               </div>
               <button 
                 onClick={loadAiAlerts}
-                className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                disabled={alertsLoading}
+                className="px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -328,35 +383,102 @@ export default function DashboardPage() {
             </div>
             
             {alertsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                <span className="ml-3 text-gray-600">Đang phân tích dữ liệu...</span>
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="relative w-10 h-10 mb-3">
+                  <div className="absolute inset-0 border-3 border-gray-200 rounded-full"></div>
+                  <div className="absolute inset-0 border-3 border-transparent border-t-blue-600 rounded-full animate-spin"></div>
+                </div>
+                <p className="text-sm text-gray-600 font-medium">Đang phân tích dữ liệu...</p>
+                <p className="text-xs text-gray-500 mt-1">Vui lòng đợi trong giây lát</p>
               </div>
             ) : (
               <>
                 {aiSummary && (
-                  <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg">{aiSummary}</p>
+                  <div className="mb-5 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                  </div>
                 )}
-                <div className="space-y-3">
-                  {aiAlerts.map((alert, index) => (
-                    <div 
-                      key={index}
-                      className={`flex items-start gap-3 p-4 rounded-lg border ${getAlertStyles(alert.type)} cursor-pointer hover:shadow-md transition-shadow`}
-                      onClick={() => alert.action && router.push(alert.action)}
-                    >
-                      <span className="text-2xl">{alert.icon || '📋'}</span>
-                      <div className="flex-1">
-                        <p className="font-semibold">{alert.title}</p>
-                        <p className="text-sm opacity-90 mt-1">{alert.message}</p>
-                      </div>
-                      {alert.action && (
-                        <svg className="w-5 h-5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {aiAlerts.length > 0 ? (
+                  <div className="space-y-3">
+                    {aiAlerts.map((alert, index) => {
+                      const getIconColor = () => {
+                        switch (alert.type) {
+                          case 'CRITICAL':
+                            return 'text-red-600';
+                          case 'WARNING':
+                            return 'text-yellow-600';
+                          case 'SUCCESS':
+                            return 'text-green-600';
+                          default:
+                            return 'text-blue-600';
+                        }
+                      };
+                      
+                      return (
+                        <div 
+                          key={index}
+                          className={`flex items-start gap-4 p-4 rounded-lg border-2 transition-all ${
+                            alert.type === 'CRITICAL' 
+                              ? 'bg-red-50 border-red-200 hover:border-red-300 hover:shadow-sm' 
+                              : alert.type === 'WARNING'
+                              ? 'bg-yellow-50 border-yellow-200 hover:border-yellow-300 hover:shadow-sm'
+                              : alert.type === 'SUCCESS'
+                              ? 'bg-green-50 border-green-200 hover:border-green-300 hover:shadow-sm'
+                              : 'bg-blue-50 border-blue-200 hover:border-blue-300 hover:shadow-sm'
+                          } ${alert.action ? 'cursor-pointer' : ''}`}
+                          onClick={() => alert.action && router.push(alert.action)}
+                        >
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${
+                            alert.type === 'CRITICAL' 
+                              ? 'bg-red-100' 
+                              : alert.type === 'WARNING'
+                              ? 'bg-yellow-100'
+                              : alert.type === 'SUCCESS'
+                              ? 'bg-green-100'
+                              : 'bg-blue-100'
+                          }`}>
+                            <span className="text-xl">{getIconDisplay(alert.icon, alert.type)}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-semibold text-sm mb-1.5 ${
+                              alert.type === 'CRITICAL' 
+                                ? 'text-red-900' 
+                                : alert.type === 'WARNING'
+                                ? 'text-yellow-900'
+                                : alert.type === 'SUCCESS'
+                                ? 'text-green-900'
+                                : 'text-blue-900'
+                            }`}>
+                              {alert.title}
+                            </p>
+                            <p className={`text-sm leading-relaxed ${
+                              alert.type === 'CRITICAL' 
+                                ? 'text-red-700' 
+                                : alert.type === 'WARNING'
+                                ? 'text-yellow-700'
+                                : alert.type === 'SUCCESS'
+                                ? 'text-green-700'
+                                : 'text-blue-700'
+                            }`}>
+                              {alert.message}
+                            </p>
+                          </div>
+                          {alert.action && (
+                            <div className="flex-shrink-0">
+                              <svg className={`w-5 h-5 ${getIconColor()} opacity-60`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-500">Không có cảnh báo nào vào lúc này</p>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -471,7 +593,7 @@ export default function DashboardPage() {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-800">{item.code}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {item.supplierName || 'N/A'} • {formatDate(item.importsDate)}
+                        {item.supplierName || 'Chưa có'} • {formatDate(item.importsDate)}
                       </p>
                     </div>
                     <div className="text-right ml-4">
@@ -503,7 +625,7 @@ export default function DashboardPage() {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-800">{item.code}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {item.supplierName || 'N/A'} • {formatDate(item.exportsDate)}
+                        {item.supplierName || 'Chưa có'} • {formatDate(item.exportsDate)}
                       </p>
                     </div>
                     <div className="text-right ml-4">

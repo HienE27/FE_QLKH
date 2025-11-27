@@ -598,13 +598,13 @@ export default function CreateProductPage() {
                   </div>
                 )}
 
-                <textarea
-                  id="description"
+              <textarea
+                id="description"
                   className="w-full px-4 py-2 border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"
                   placeholder="Nhập hoặc chỉnh sửa mô tả sản phẩm"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
                 {aiError && (
                   <p className="text-xs text-red-600">{aiError}</p>
                 )}

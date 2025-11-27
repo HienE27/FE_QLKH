@@ -446,28 +446,17 @@ export default function AiFeaturePanels() {
   };
 
   return (
-    <div className="space-y-8 mb-10">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Sales Trend */}
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs uppercase text-sky-500 font-semibold">Phân tích xu hướng</p>
-              <h3 className="text-xl font-semibold text-gray-800">Bán hàng & tăng trưởng</h3>
+              <p className="text-xs uppercase text-sky-600 font-semibold tracking-wide">Phân tích xu hướng</p>
+              <h3 className="text-lg font-semibold text-gray-900 mt-0.5">Bán hàng & tăng trưởng</h3>
             </div>
-            <select
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              value={trendPeriod}
-              onChange={(e) => setTrendPeriod(e.target.value as typeof trendPeriod)}
-            >
-              {trendOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt === 'WEEKLY' ? 'Theo tuần' : opt === 'MONTHLY' ? 'Theo tháng' : 'Theo quý'}
-                </option>
-              ))}
-            </select>
           </div>
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             {trendOptions.map((option) => (
               <button
                 key={option}
@@ -485,10 +474,10 @@ export default function AiFeaturePanels() {
             <button
               type="button"
               onClick={() => void fetchTrend()}
-              className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
+              className="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700 transition ml-auto"
               disabled={trendLoading}
             >
-              {trendLoading ? 'Đang phân tích...' : 'Làm mới'}
+              {trendLoading ? 'Đang tải...' : 'Làm mới'}
             </button>
           </div>
           {trendError && (
@@ -497,75 +486,85 @@ export default function AiFeaturePanels() {
             </div>
           )}
           {trendData && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
-                  <p className="text-xs uppercase text-gray-400">Tổng doanh thu</p>
-                  <p className="text-lg font-semibold text-gray-800">
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <p className="text-xs text-gray-500 mb-0.5">Tổng doanh thu</p>
+                  <p className="text-base font-semibold text-gray-900">
                     {formatCurrency(trendStats.totalRevenue)}
                   </p>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
-                  <p className="text-xs uppercase text-gray-400">Tổng đơn hàng</p>
-                  <p className="text-lg font-semibold text-gray-800">{trendStats.totalOrders}</p>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <p className="text-xs text-gray-500 mb-0.5">Tổng đơn hàng</p>
+                  <p className="text-base font-semibold text-gray-900">{trendStats.totalOrders}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
-                  <p className="text-xs uppercase text-gray-400">Tăng trưởng đỉnh</p>
-                  <p className="text-lg font-semibold text-gray-800">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <p className="text-xs text-gray-500 mb-0.5">Tăng trưởng đỉnh</p>
+                  <p className="text-base font-semibold text-gray-900">
                     {trendStats.maxGrowth.toFixed(1)}%
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-xl bg-sky-50 border border-sky-100 flex-1">
-                  <p className="text-xs uppercase text-sky-600">Xu hướng</p>
-                  <p className="text-lg font-semibold text-gray-800">{trendData.trend}</p>
-                  <p className="text-sm text-gray-500">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 rounded-lg bg-sky-50 border border-sky-200">
+                  <p className="text-xs text-sky-700 font-medium mb-1">Xu hướng</p>
+                  <p className="text-sm font-semibold text-gray-900">{trendData.trend}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">
                     Tăng trưởng {trendData.growthRate?.toFixed(2)}%
                   </p>
                 </div>
-                <div className="flex-1 p-4 rounded-xl bg-indigo-50 border border-indigo-100">
-                  <p className="text-xs uppercase text-indigo-600">Dự báo</p>
-                  <p className="text-sm text-gray-700">{trendData.forecast}</p>
+                <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200">
+                  <p className="text-xs text-indigo-700 font-medium mb-1">Dự báo</p>
+                  <p className="text-xs text-gray-700 leading-relaxed">{trendData.forecast}</p>
                 </div>
               </div>
-              <div className="space-y-2">
-                {trendData.trendData.slice(0, 5).map((item) => (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>{item.label}</span>
-                      <span>{formatCurrency(item.revenue)}</span>
+              {trendData.trendData.length > 0 && (
+                <div className="space-y-1.5">
+                  {trendData.trendData.slice(0, 3).map((item) => (
+                    <div key={item.label} className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <div className="flex justify-between text-xs text-gray-600 mb-0.5">
+                          <span>{item.label}</span>
+                          <span className="font-medium">{formatCurrency(item.revenue)}</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-400 to-blue-600 transition-all"
+                            style={{ width: `${Math.min(Math.abs(item.growth), 100)}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden relative">
-                      <span
-                        className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-600 transition-all"
-                        style={{ width: `${Math.min(Math.abs(item.growth), 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <p className="text-xs uppercase text-gray-400 mb-1">Top sản phẩm</p>
-                <div className="flex flex-wrap gap-2">
-                  {trendData.topProducts.map((product) => (
-                    <span
-                      key={product}
-                      className="px-3 py-1 text-xs bg-gray-100 rounded-full text-gray-700"
-                    >
-                      {product}
-                    </span>
                   ))}
                 </div>
-              </div>
-              <p className="text-sm text-gray-600 leading-relaxed">{trendData.analysis}</p>
-              <ul className="list-disc pl-4 text-sm text-gray-600 space-y-1">
-                {trendData.recommendations.map((rec, idx) => (
-                  <li key={idx}>{rec}</li>
-                ))}
-              </ul>
+              )}
+              {trendData.topProducts.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1.5 font-medium">Top sản phẩm</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {trendData.topProducts.slice(0, 5).map((product) => (
+                      <span
+                        key={product}
+                        className="px-2 py-0.5 text-xs bg-gray-100 rounded text-gray-700"
+                      >
+                        {product}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {trendData.analysis && (
+                <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">{trendData.analysis}</p>
+              )}
+              {trendData.recommendations.length > 0 && (
+                <ul className="list-disc pl-4 text-xs text-gray-600 space-y-0.5">
+                  {trendData.recommendations.slice(0, 3).map((rec, idx) => (
+                    <li key={idx}>{rec}</li>
+                  ))}
+                </ul>
+              )}
               {trendFetchedAt && (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-400 pt-1 border-t border-gray-100">
                   Cập nhật lúc {trendFetchedAt.toLocaleTimeString('vi-VN')}
                 </p>
               )}
@@ -581,30 +580,30 @@ export default function AiFeaturePanels() {
         </section>
 
         {/* Auto report */}
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs uppercase text-purple-500 font-semibold">Báo cáo tự động</p>
-              <h3 className="text-xl font-semibold text-gray-800">Xuất báo cáo AI</h3>
-            </div>
-            <div className="flex gap-2 flex-wrap justify-end">
-              {reportTypes.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setReportRequest((prev) => ({ ...prev, reportType: type }))}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border ${
-                    reportRequest.reportType === type
-                      ? 'bg-purple-500 text-white border-purple-500'
-                      : 'border-gray-200 text-gray-600 hover:border-purple-200'
-                  }`}
-                >
-                  {reportTypeLabels[type]}
-                </button>
-              ))}
+              <p className="text-xs uppercase text-purple-600 font-semibold tracking-wide">Báo cáo tự động</p>
+              <h3 className="text-lg font-semibold text-gray-900 mt-0.5">Xuất báo cáo AI</h3>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3 mb-4">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {reportTypes.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setReportRequest((prev) => ({ ...prev, reportType: type }))}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition ${
+                  reportRequest.reportType === type
+                    ? 'bg-purple-600 text-white border-purple-600'
+                    : 'border-gray-200 text-gray-600 hover:border-purple-300 hover:bg-purple-50'
+                }`}
+              >
+                {reportTypeLabels[type]}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
             <div className="flex gap-2 flex-wrap">
               {reportPeriods.map((period) => (
                 <button
@@ -624,7 +623,7 @@ export default function AiFeaturePanels() {
             <button
               type="button"
               onClick={() => void handleReport()}
-              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium hover:shadow-lg transition"
+              className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition"
               disabled={reportLoading}
             >
               {reportLoading ? 'Đang tạo...' : 'Tạo báo cáo'}
@@ -632,32 +631,19 @@ export default function AiFeaturePanels() {
             <button
               type="button"
               onClick={() => void handleReport()}
-              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition disabled:opacity-60"
+              className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition disabled:opacity-50"
               disabled={reportLoading || !reportData}
             >
-              Làm mới dữ liệu
+              Làm mới
             </button>
-            <select
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              value={reportRequest.format}
-              onChange={(e) =>
-                setReportRequest((prev) => ({ ...prev, format: e.target.value as ReportRequest['format'] }))
-              }
-            >
-              {['HTML', 'PDF', 'EXCEL'].map((fmt) => (
-                <option key={fmt} value={fmt}>
-                  Định dạng ưu tiên: {fmt}
-                </option>
-              ))}
-            </select>
             {reportData && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 ml-auto">
                 {['HTML', 'PDF', 'EXCEL'].map((format) => (
                   <button
                     key={format}
                     type="button"
                     onClick={() => void downloadReport(format as 'HTML' | 'PDF' | 'EXCEL')}
-                    className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Xuất {format}
                   </button>
@@ -665,75 +651,73 @@ export default function AiFeaturePanels() {
               </div>
             )}
           </div>
-          {reportLoading && <div className="h-40 bg-slate-100 rounded-xl animate-pulse" />}
+          {reportLoading && <div className="h-32 bg-gray-50 rounded-lg animate-pulse" />}
           {reportData && (
-            <div className="border border-gray-100 rounded-xl p-4 max-h-80 overflow-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">{reportData.title}</p>
-                  <p className="text-xs text-gray-500">{reportData.reportType}</p>
-                </div>
-                <span className="text-xs text-gray-400">
-                  Định dạng ưu tiên: {reportRequest.format ?? 'HTML'}
-                </span>
+            <div className="border border-gray-200 rounded-lg p-3 max-h-64 overflow-auto bg-gray-50">
+              <div className="mb-2">
+                <p className="text-sm font-semibold text-gray-900">{reportData.title}</p>
+                {reportData.summary && (
+                  <p className="text-xs text-gray-600 mt-1 line-clamp-2">{reportData.summary}</p>
+                )}
               </div>
-              <p className="text-sm text-gray-600 my-3">{reportData.summary}</p>
-              <div className="text-sm text-gray-600 mb-3">{reportData.highlights}</div>
               <div
                 ref={reportPreviewRef}
-                className="prose prose-sm max-w-none bg-gray-50 border border-gray-100 rounded-lg p-3"
+                className="prose prose-xs max-w-none text-gray-700"
                 dangerouslySetInnerHTML={{ __html: reportData.htmlContent }}
               />
-              <p className="text-sm text-gray-600 mt-3">{reportData.recommendations}</p>
             </div>
           )}
         </section>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-xs uppercase text-amber-500 font-semibold">Combo gợi ý</p>
-              <h3 className="text-xl font-semibold text-gray-800">Tối ưu khuyến mãi</h3>
+              <p className="text-xs uppercase text-amber-600 font-semibold tracking-wide">Combo gợi ý</p>
+              <h3 className="text-lg font-semibold text-gray-900 mt-0.5">Tối ưu khuyến mãi</h3>
             </div>
             <button
               type="button"
               onClick={() => void fetchCombos()}
-              className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition"
+              className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 transition"
               disabled={comboLoading}
             >
               {comboLoading ? 'Đang xử lý...' : 'Lấy gợi ý'}
             </button>
           </div>
           {comboData && (
-            <div className="space-y-4 max-h-96 overflow-auto pr-2">
+            <div className="space-y-3 max-h-80 overflow-auto">
               {comboData.combos.map((combo) => (
-                <div key={combo.name} className="border border-gray-100 rounded-xl p-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-base font-semibold text-gray-800">{combo.name}</h4>
-                    <span className="text-sm font-medium text-red-500">-{combo.discount}%</span>
+                <div key={combo.name} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <h4 className="text-sm font-semibold text-gray-900">{combo.name}</h4>
+                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">-{combo.discount}%</span>
                   </div>
-                  <p className="text-xs text-gray-500 mb-2">{combo.reason}</p>
-                  <ul className="text-sm text-gray-700 space-y-1 mb-2">
-                    {combo.items.map((item) => (
+                  {combo.reason && (
+                    <p className="text-xs text-gray-600 mb-2">{combo.reason}</p>
+                  )}
+                  <ul className="text-xs text-gray-700 space-y-0.5 mb-2">
+                    {combo.items.slice(0, 3).map((item) => (
                       <li key={item.code}>
                         {item.name} ×{item.quantity} - {formatCurrency(item.price)}
                       </li>
                     ))}
                   </ul>
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between items-center text-xs pt-2 border-t border-gray-200">
                     <span className="text-gray-500">{combo.targetCustomer}</span>
-                    <span className="font-semibold text-gray-800">
-                      {formatCurrency(combo.comboPrice)}{' '}
-                      <span className="text-xs text-gray-400 line-through">
+                    <span className="font-semibold text-gray-900">
+                      {formatCurrency(combo.comboPrice)}
+                      <span className="text-gray-400 line-through ml-1">
                         {formatCurrency(combo.originalPrice)}
                       </span>
                     </span>
                   </div>
                 </div>
               ))}
-              <p className="text-sm text-gray-600">{comboData.analysis}</p>
+              {comboData.analysis && (
+                <p className="text-xs text-gray-600 leading-relaxed">{comboData.analysis}</p>
+              )}
             </div>
           )}
         </section>

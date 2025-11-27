@@ -14,6 +14,74 @@ import type { Order } from '@/types/order';
 const formatCurrency = (value: number) =>
     value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
 
+// Helper function to format AI suggestion content
+const formatAISuggestion = (content: string): { type: 'simple'; content: string } | Array<{ type: 'title' | 'note' | 'assumption' | 'recommendation' | 'text'; content: string }> => {
+    if (!content) return { type: 'simple', content: '' };
+
+    // Split content into lines
+    const lines = content.split(/\n+/).filter(Boolean);
+    const sections: Array<{ type: 'title' | 'note' | 'assumption' | 'recommendation' | 'text'; content: string }> = [];
+    let currentSection: { type: string; content: string } | null = null;
+
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // Clean up markdown formatting
+        const cleanLine = trimmed.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+        
+        // Detect section headers with various patterns
+        const isNote = /lưu ý|note|chú ý/i.test(cleanLine);
+        const isAssumption = /giả định|assumption|giả sử/i.test(cleanLine);
+        const isRecommendation = /khuyến nghị|đề xuất|recommendation|gợi ý/i.test(cleanLine);
+        const isTitle = trimmed.match(/^#{1,3}\s/) || (trimmed.match(/^\*\*[^*]+\*\*$/) && cleanLine.length < 50);
+
+        if (isNote || isAssumption || isRecommendation || isTitle) {
+            // Save previous section
+            if (currentSection) {
+                sections.push(currentSection);
+            }
+            
+            // Start new section
+            if (isNote) {
+                currentSection = { type: 'note', content: cleanLine };
+            } else if (isAssumption) {
+                currentSection = { type: 'assumption', content: cleanLine };
+            } else if (isRecommendation) {
+                currentSection = { type: 'recommendation', content: cleanLine };
+            } else if (isTitle) {
+                currentSection = { type: 'title', content: cleanLine };
+            } else {
+                currentSection = { type: 'text', content: cleanLine };
+            }
+        } else {
+            // Continue current section or start text section
+            if (!currentSection) {
+                currentSection = { type: 'text', content: '' };
+            }
+            
+            // Append to current section
+            if (currentSection.content) {
+                currentSection.content += '\n' + cleanLine;
+            } else {
+                currentSection.content = cleanLine;
+            }
+        }
+    });
+
+    // Add last section
+    if (currentSection && currentSection.content) {
+        sections.push(currentSection);
+    }
+
+    // If no structured sections found, return as simple text
+    if (sections.length === 0 || (sections.length === 1 && sections[0].type === 'text' && sections[0].content === content.trim())) {
+        return { type: 'simple', content };
+    }
+
+    return sections;
+};
+
 export default function InventoryReportPage() {
     const router = useRouter();
     const [data, setData] = useState<Product[]>([]);
@@ -487,106 +555,229 @@ export default function InventoryReportPage() {
                 </div>
 
                 {/* Export Buttons + AI Forecast */}
-                <div className="flex justify-between items-center gap-3 mb-6">
-                    <div className="max-w-xl">
-                        <p className="text-sm font-semibold text-gray-800 mb-1">
-                            AI dự báo tồn kho
-                        </p>
-                        <p className="text-xs text-gray-500 mb-2">
-                            Gửi danh sách hàng hiện tại cho AI để gợi ý SKU sắp thiếu / dư hàng.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={async () => {
-                                if (!filteredData.length) {
-                                    alert('Không có dữ liệu tồn kho để phân tích.');
-                                    return;
-                                }
-                                setAiLoading(true);
-                                setAiSuggestion(null);
-                                try {
-                                    // Lấy dữ liệu orders để tính avgDailySales
-                                    let orders: Order[] = [];
-                                    try {
-                                        orders = await getOrders();
-                                    } catch (err) {
-                                        console.warn('Không thể lấy dữ liệu orders:', err);
-                                    }
-
-                                    // Tính toán avgDailySales cho mỗi sản phẩm
-                                    const now = new Date();
-                                    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                                    
-                                    // Đếm số lượng bán trong 7 ngày qua theo product code
-                                    const salesByProduct = new Map<string, number>();
-                                    orders.forEach(order => {
-                                        const orderDate = new Date(order.createdAt || order.orderDate || '');
-                                        if (orderDate >= sevenDaysAgo) {
-                                            order.items?.forEach(item => {
-                                                const productCode = item.productCode || item.product?.code;
-                                                if (productCode) {
-                                                    const current = salesByProduct.get(productCode) || 0;
-                                                    salesByProduct.set(productCode, current + (item.quantity || 0));
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+                    <div className="xl:col-span-2 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                        <div className="flex flex-col gap-4">
+                            <div>
+                                <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">AI dự báo tồn kho</p>
+                                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                    Tối ưu nhập hàng & tránh thiếu hụt
+                                </h3>
+                                <p className="text-sm text-gray-600">
+                                    Gửi danh sách kho hiện tại để AI dự báo SKU sắp thiếu, đề xuất phương án xử lý nhanh.
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (!filteredData.length) {
+                                            alert('Không có dữ liệu tồn kho để phân tích.');
+                                            return;
+                                        }
+                                        setAiLoading(true);
+                                        setAiSuggestion(null);
+                                        try {
+                                            let orders: Order[] = [];
+                                            try {
+                                                orders = await getOrders();
+                                            } catch (err) {
+                                                console.warn('Không thể lấy dữ liệu orders:', err);
+                                            }
+                                            const now = new Date();
+                                            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                                            const salesByProduct = new Map<string, number>();
+                                            orders.forEach(order => {
+                                                const orderDate = new Date(order.createdAt || order.orderDate || '');
+                                                if (orderDate >= sevenDaysAgo) {
+                                                    order.items?.forEach(item => {
+                                                        const productCode = item.productCode || item.product?.code;
+                                                        if (productCode) {
+                                                            const current = salesByProduct.get(productCode) || 0;
+                                                            salesByProduct.set(productCode, current + (item.quantity || 0));
+                                                        }
+                                                    });
                                                 }
                                             });
+                                            const items = filteredData.slice(0, 50).map(p => {
+                                                const totalSales7Days = salesByProduct.get(p.code) || 0;
+                                                const avgDailySales = totalSales7Days > 0 ? totalSales7Days / 7 : undefined;
+                                                return {
+                                                    code: p.code,
+                                                    name: p.name,
+                                                    quantity: p.quantity || 0,
+                                                    avgDailySales,
+                                                };
+                                            });
+                                            const data = await aiInventoryForecast(items);
+                                            setAiSuggestion(data.recommendation);
+                                        } catch (err) {
+                                            console.error('AI inventory forecast client error:', err);
+                                            alert(
+                                                err instanceof Error
+                                                    ? err.message
+                                                    : 'Có lỗi khi gọi AI.',
+                                            );
+                                        } finally {
+                                            setAiLoading(false);
                                         }
-                                    });
-
-                                    // Tính avgDailySales = tổng bán trong 7 ngày / 7
-                                    const items = filteredData.slice(0, 50).map(p => {
-                                        const totalSales7Days = salesByProduct.get(p.code) || 0;
-                                        const avgDailySales = totalSales7Days > 0 ? totalSales7Days / 7 : undefined;
-                                        return {
-                                            code: p.code,
-                                            name: p.name,
-                                            quantity: p.quantity || 0,
-                                            avgDailySales,
-                                        };
-                                    });
-
-                                    const data = await aiInventoryForecast(items);
-                                    setAiSuggestion(data.recommendation);
-                                } catch (err) {
-                                    console.error('AI inventory forecast client error:', err);
-                                    alert(
-                                        err instanceof Error
-                                            ? err.message
-                                            : 'Có lỗi khi gọi AI.',
-                                    );
-                                } finally {
-                                    setAiLoading(false);
-                                }
-                            }}
-                            disabled={aiLoading}
-                            className="px-4 py-2 rounded-md bg-sky-600 text-white text-xs font-medium hover:bg-sky-700 disabled:opacity-60"
-                        >
-                            {aiLoading ? 'Đang phân tích...' : 'Xin gợi ý từ AI'}
-                        </button>
-                        {aiSuggestion && (
-                            <div className="mt-2 max-h-40 overflow-y-auto text-xs text-gray-700 bg-sky-50 border border-sky-100 rounded-md p-2 whitespace-pre-wrap">
-                                {aiSuggestion}
+                                    }}
+                                    disabled={aiLoading}
+                                    className="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    {aiLoading ? 'Đang phân tích...' : 'Xin gợi ý từ AI'}
+                                </button>
+                                <button
+                                    onClick={handleSearch}
+                                    className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                                    disabled={loading}
+                                >
+                                    {loading ? 'Đang tải dữ liệu...' : 'Làm mới dữ liệu'}
+                                </button>
                             </div>
-                        )}
-                    </div>
+                            <div className="bg-gray-50 rounded-lg border border-gray-200 p-5 max-h-96 overflow-y-auto">
+                                {aiLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                                        <div className="relative w-12 h-12 mb-4">
+                                            <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
+                                            <div className="absolute inset-0 border-4 border-transparent border-t-blue-600 rounded-full animate-spin"></div>
+                                        </div>
+                                        <p className="text-sm text-gray-700 font-medium">Đang phân tích dữ liệu...</p>
+                                        <p className="text-xs text-gray-500 mt-1">Vui lòng đợi trong giây lát</p>
+                                    </div>
+                                ) : aiSuggestion ? (
+                                    (() => {
+                                        const formatted = formatAISuggestion(aiSuggestion);
 
-                    <button
-                        onClick={handleExportExcel}
-                        className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors flex items-center gap-2"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10M11.3333 5.33333L8 2M8 2L4.66667 5.33333M8 2V10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Xuất Excel
-                    </button>
-                    <button
-                        onClick={handleExportPDF}
-                        className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors flex items-center gap-2"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10M11.3333 5.33333L8 2M8 2L4.66667 5.33333M8 2V10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                        Xuất PDF
-                    </button>
+                                        // Simple text format
+                                        if (formatted.type === 'simple') {
+                                            return (
+                                                <div className="text-sm text-gray-700 space-y-2 whitespace-pre-wrap leading-relaxed">
+                                                    {formatted.content}
+                                                </div>
+                                            );
+                                        }
+
+                                        // Structured sections
+                                        return (
+                                            <div className="space-y-4">
+                                                {formatted.map((section, idx) => {
+                                                    if (section.type === 'title') {
+                                                        return (
+                                                            <h4 key={idx} className="text-base font-bold text-gray-900 mb-2 border-b border-gray-300 pb-2">
+                                                                {section.content}
+                                                            </h4>
+                                                        );
+                                                    }
+                                                    if (section.type === 'note') {
+                                                        // Extract title and content
+                                                        const lines = section.content.split('\n');
+                                                        const title = lines[0] || 'Lưu ý';
+                                                        const content = lines.slice(1).join('\n') || title;
+                                                        return (
+                                                            <div key={idx} className="bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg p-3">
+                                                                <p className="text-xs font-semibold text-yellow-800 mb-2 flex items-center gap-1">
+                                                                    <span>⚠️</span>
+                                                                    <span>{title}</span>
+                                                                </p>
+                                                                {lines.length > 1 && (
+                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed ml-5">
+                                                                        {content}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (section.type === 'assumption') {
+                                                        const lines = section.content.split('\n');
+                                                        const title = lines[0] || 'Giả định';
+                                                        const content = lines.slice(1).join('\n') || title;
+                                                        return (
+                                                            <div key={idx} className="bg-blue-50 border-l-4 border-blue-400 rounded-r-lg p-3">
+                                                                <p className="text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1">
+                                                                    <span>ℹ️</span>
+                                                                    <span>{title}</span>
+                                                                </p>
+                                                                {lines.length > 1 && (
+                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed ml-5">
+                                                                        {content}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (section.type === 'recommendation') {
+                                                        const lines = section.content.split('\n');
+                                                        const title = lines[0] || 'Khuyến nghị';
+                                                        const content = lines.slice(1).join('\n') || title;
+                                                        return (
+                                                            <div key={idx} className="bg-green-50 border-l-4 border-green-400 rounded-r-lg p-3">
+                                                                <p className="text-xs font-semibold text-green-800 mb-2 flex items-center gap-1">
+                                                                    <span>💡</span>
+                                                                    <span>{title}</span>
+                                                                </p>
+                                                                {lines.length > 1 && (
+                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed ml-5">
+                                                                        {content}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div key={idx} className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                                            {section.content}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })()
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                                        <svg className="w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                        </svg>
+                                        <p className="text-sm text-gray-600">
+                                            Chưa có gợi ý. Hãy nhấn "Xin gợi ý từ AI" để hệ thống phân tích danh mục hàng.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col gap-4 shadow-sm">
+                        <div>
+                            <p className="text-sm font-semibold text-gray-800 mb-1">Xuất báo cáo nhanh</p>
+                            <p className="text-xs text-gray-500">
+                                Lưu lại kết quả hiện tại dưới dạng Excel/PDF với định dạng chuẩn hoá và đầy đủ chỉ số.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3">
+                            <button
+                                onClick={handleExportExcel}
+                                className="w-full px-5 py-3 rounded-lg bg-green-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-green-700 transition"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                    <path d="M8 11L12 15L16 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M12 4V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                Xuất Excel
+                            </button>
+                            <button
+                                onClick={handleExportPDF}
+                                className="w-full px-5 py-3 rounded-lg bg-red-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-red-700 transition"
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                    <path d="M8 11L12 15L16 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M12 4V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                                Xuất PDF
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Table */}
