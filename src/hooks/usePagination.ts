@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 export function usePagination<T>(data: T[], itemsPerPage: number = 10) {
     const [currentPage, setCurrentPage] = useState(1);
 
-    const totalPages = Math.ceil(data.length / itemsPerPage);
+    const totalPages = Math.max(1, Math.ceil(data.length / itemsPerPage));
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentData = data.slice(startIndex, endIndex);
@@ -20,13 +20,15 @@ export function usePagination<T>(data: T[], itemsPerPage: number = 10) {
     }), [currentPage, data.length, itemsPerPage, startIndex, endIndex, totalPages]);
 
     const goToPage = (page: number) => {
-        if (page >= 1 && page <= totalPages) {
+        const maxPage = Math.max(1, Math.ceil(data.length / itemsPerPage));
+        if (page >= 1 && page <= maxPage) {
             setCurrentPage(page);
         }
     };
 
     const nextPage = () => {
-        if (currentPage < totalPages) {
+        const maxPage = Math.max(1, Math.ceil(data.length / itemsPerPage));
+        if (currentPage < maxPage) {
             setCurrentPage(currentPage + 1);
         }
     };

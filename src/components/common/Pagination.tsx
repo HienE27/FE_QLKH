@@ -16,6 +16,7 @@ export default function Pagination({
     const startIndex = (currentPage - 1) * itemsPerPage;
     const displayStart = totalItems === 0 ? 0 : startIndex + 1;
     const displayEnd = Math.min(startIndex + itemsPerPage, totalItems);
+    const maxPage = Math.max(1, totalPages);
 
     const handlePrevious = () => {
         if (currentPage > 1) {
@@ -24,7 +25,7 @@ export default function Pagination({
     };
 
     const handleNext = () => {
-        if (currentPage < totalPages) {
+        if (currentPage < maxPage) {
             onPageChange(currentPage + 1);
         }
     };
@@ -43,11 +44,11 @@ export default function Pagination({
                     Trước
                 </button>
                 <span className="px-4 py-2 text-sm">
-                    Trang {currentPage}/{totalPages || 1}
+                    Trang {currentPage}/{maxPage}
                 </span>
                 <button
                     onClick={handleNext}
-                    disabled={currentPage >= totalPages}
+                    disabled={currentPage >= maxPage}
                     className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     Sau

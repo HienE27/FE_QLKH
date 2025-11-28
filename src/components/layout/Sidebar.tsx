@@ -294,6 +294,34 @@ const navSections: NavSection[] = [
       },
     ],
   },
+  {
+    id: 'settings',
+    label: 'Hệ thống',
+    indicator: 'from-blue-100 via-blue-50 to-transparent',
+    accentCircle: 'from-blue-400 via-blue-500 to-blue-600',
+    icon: (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none">
+        <path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M8 2v1.5M8 12.5V14M3.5 8H2M14 8h-1.5M4.22 4.22l1.06 1.06M10.72 10.72l1.06 1.06M4.22 11.78l1.06-1.06M10.72 5.28l1.06-1.06" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+    groups: [
+      {
+        colorClass: 'bg-blue-400',
+        links: [
+          {
+            label: 'Cài đặt hệ thống',
+            href: '/settings',
+            matches: [
+              '/settings',
+              '/settings/create',
+              '/settings/edit/',
+            ],
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 const quickLinks: NavLinkItem[] = [

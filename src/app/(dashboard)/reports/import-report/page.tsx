@@ -236,10 +236,10 @@ export default function ImportReportPage() {
         loadData();
     }, [loadData]);
 
-    // Reset page when filteredData changes
+    // Reset page when sortedData changes (after filtering/sorting)
     useEffect(() => {
         resetPage();
-    }, [filteredData, resetPage]);
+    }, [sortedData.length, resetPage]);
 
     const handleSearch = () => {
         loadData();

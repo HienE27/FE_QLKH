@@ -2,9 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { clearToken } from '@/lib/auth';
+import { useSetting } from '@/hooks/useSettings';
 
 export default function Header() {
   const router = useRouter();
+  const { value: companyName } = useSetting('company_name', 'Công ty ABC');
 
   const handleLogout = () => {
     clearToken();
@@ -37,7 +39,7 @@ export default function Header() {
             <div className="absolute inset-0 bg-yellow-300 blur-xl opacity-30 group-hover:opacity-50 transition-opacity"></div>
           </div>
           <span className="text-white text-xl font-semibold tracking-wide">
-            Công ty ABC
+            {companyName}
           </span>
         </div>
 
