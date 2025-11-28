@@ -38,6 +38,18 @@ export async function apiFetch<T>(
     } catch {
       // ignore
     }
+    
+    // Provide more specific error messages for common status codes
+    if (res.status === 403) {
+      message = 'Không có quyền truy cập. Vui lòng đăng nhập lại.';
+    } else if (res.status === 401) {
+      message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+    } else if (res.status === 404) {
+      message = 'Không tìm thấy tài nguyên.';
+    } else if (res.status >= 500) {
+      message = 'Lỗi máy chủ. Vui lòng thử lại sau.';
+    }
+    
     throw new Error(message);
   }
 

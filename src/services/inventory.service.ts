@@ -83,6 +83,11 @@ export async function getSupplierExports(params?: {
     });
 
     if (!res.ok) {
+        if (res.status === 403) {
+            throw new Error("Không có quyền truy cập. Vui lòng đăng nhập lại.");
+        } else if (res.status === 401) {
+            throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
         throw new Error("Không lấy được danh sách phiếu xuất NCC");
     }
 
@@ -1132,6 +1137,11 @@ export async function getImportOrders(params?: {
     });
 
     if (!res.ok) {
+        if (res.status === 403) {
+            throw new Error("Không có quyền truy cập. Vui lòng đăng nhập lại.");
+        } else if (res.status === 401) {
+            throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
         throw new Error("Không lấy được danh sách lệnh nhập kho");
     }
 
@@ -1383,6 +1393,11 @@ export async function getExportOrders(params?: {
     });
 
     if (!res.ok) {
+        if (res.status === 403) {
+            throw new Error("Không có quyền truy cập. Vui lòng đăng nhập lại.");
+        } else if (res.status === 401) {
+            throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
         throw new Error("Không lấy được danh sách lệnh xuất kho");
     }
 

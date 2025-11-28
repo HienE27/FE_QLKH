@@ -456,67 +456,84 @@ export default function EditStaffExportReceipt() {
                     </div>
 
                     {/* BẢNG SẢN PHẨM */}
-                    <div className="border-4 border-gray-400 mb-6 overflow-hidden rounded">
-                        <table className="w-full text-sm">
+                    <div className="border border-gray-200 rounded-lg mb-6 overflow-hidden shadow-sm">
+                        <table className="w-full">
                             <thead>
-                                <tr className="bg-[#0046ff] text-white h-10">
-                                    <th className="px-2 w-12">STT</th>
-                                    <th className="px-2 w-40">Tên hàng hóa</th>
-                                    <th className="px-2 w-28">Mã hàng</th>
-                                    <th className="px-2 w-20">ĐVT</th>
-                                    <th className="px-2 w-28">Đơn giá</th>
-                                    <th className="px-2 w-20">SL</th>
-                                    <th className="px-2 w-24">Chiết khấu (%)</th>
-                                    <th className="px-2 w-28">Thành tiền</th>
-                                    <th className="px-2 w-16">Xóa</th>
+                                <tr className="bg-blue-600 text-white">
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">STT</th>
+                                    <th className="px-4 py-3 text-left font-semibold text-sm">Tên hàng hóa</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Mã hàng</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Đơn vị tính</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Đơn giá</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Số lượng</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Chiết khấu (%)</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Thành tiền</th>
+                                    <th className="px-4 py-3 text-center font-semibold text-sm">Xóa</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {products.map((product, index) => (
-                                    <tr key={product.id} className="border border-gray-400 h-12 hover:bg-gray-50">
-                                        <td className="px-2 text-center text-sm border-r border-gray-400">{index + 1}</td>
-                                        <td className="px-2 text-left text-sm border-r border-gray-400">{product.name}</td>
-                                        <td className="px-2 text-center text-sm border-r border-gray-400">{product.code}</td>
-                                        <td className="px-2 text-center text-sm border-r border-gray-400">{product.unit}</td>
-                                        <td className="px-2 border-r border-gray-400">
-                                            <input
-                                                type="text"
-                                                value={product.price}
-                                                onChange={(e) => handleChangeProductField(product.id, 'price', e.target.value)}
-                                                className="w-full text-right px-2 py-1 border-0 bg-transparent focus:outline-none"
-                                            />
-                                        </td>
-                                        <td className="px-2 border-r border-gray-400">
-                                            <input
-                                                type="text"
-                                                value={product.quantity}
-                                                onChange={(e) => handleChangeProductField(product.id, 'quantity', e.target.value)}
-                                                className="w-full text-center px-2 py-1 border-0 bg-transparent focus:outline-none"
-                                            />
-                                        </td>
-                                        <td className="px-2 border-r border-gray-400">
-                                            <input
-                                                type="text"
-                                                value={product.discount}
-                                                onChange={(e) => handleChangeProductField(product.id, 'discount', e.target.value)}
-                                                className="w-full text-center px-2 py-1 border-0 bg-transparent focus:outline-none"
-                                            />
-                                        </td>
-                                        <td className="px-2 text-right text-sm font-medium border-r border-gray-400">{product.total}</td>
-                                        <td className="px-2 text-center border-r border-gray-400">
-                                            <button onClick={() => deleteProduct(product.id)} className="hover:scale-110 transition-transform">
-                                                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                                                    <path d="M3 6H19M8 6V4C8 3.44772 8.44772 3 9 3H13C13.5523 3 14 3.44772 14 4V6M17 6V18C17 18.5523 16.5523 19 16 19H6C5.44772 19 5 18.5523 5 18V6H17Z" stroke="#f90606" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                                </svg>
-                                            </button>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {products.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">
+                                            Chưa có sản phẩm nào. Vui lòng thêm sản phẩm từ hệ thống.
                                         </td>
                                     </tr>
-                                ))}
-                                <tr className="border border-gray-400 h-12 bg-white">
-                                    <td colSpan={7} className="px-2 text-center font-bold text-sm border-r border-gray-400">Tổng</td>
-                                    <td className="px-2 text-right font-bold text-sm border-r border-gray-400">{formatCurrency(calculateTotal())}</td>
-                                    <td className="border-r border-gray-400"></td>
-                                </tr>
+                                ) : (
+                                    products.map((product, index) => (
+                                        <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-3 text-center text-sm text-gray-700 font-semibold">{index + 1}</td>
+                                            <td className="px-4 py-3 text-left text-sm text-gray-900 font-medium">{product.name}</td>
+                                            <td className="px-4 py-3 text-center text-sm text-gray-700">{product.code}</td>
+                                            <td className="px-4 py-3 text-center text-sm text-gray-700">{product.unit}</td>
+                                            <td className="px-4 py-3">
+                                                <input
+                                                    type="text"
+                                                    value={product.price}
+                                                    onChange={(e) => handleChangeProductField(product.id, 'price', e.target.value)}
+                                                    className="w-full text-right px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                                    placeholder="0"
+                                                />
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <input
+                                                    type="text"
+                                                    value={product.quantity}
+                                                    onChange={(e) => handleChangeProductField(product.id, 'quantity', e.target.value)}
+                                                    className="w-full text-center px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                                    placeholder="0"
+                                                />
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <input
+                                                    type="text"
+                                                    value={product.discount}
+                                                    onChange={(e) => handleChangeProductField(product.id, 'discount', e.target.value)}
+                                                    className="w-full text-center px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                                    placeholder="0"
+                                                />
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">{product.total || '0'}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <button 
+                                                    onClick={() => deleteProduct(product.id)} 
+                                                    className="hover:scale-110 transition-transform p-1 rounded hover:bg-red-50"
+                                                    title="Xóa sản phẩm"
+                                                >
+                                                    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+                                                        <path d="M3 6H19M8 6V4C8 3.44772 8.44772 3 9 3H13C13.5523 3 14 3.44772 14 4V6M17 6V18C17 18.5523 16.5523 19 16 19H6C5.44772 19 5 18.5523 5 18V6H17Z" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                                {products.length > 0 && (
+                                    <tr className="bg-blue-50 border-t-2 border-blue-600">
+                                        <td colSpan={7} className="px-4 py-3 text-right font-bold text-sm text-gray-900">Tổng</td>
+                                        <td className="px-4 py-3 text-right font-bold text-sm text-blue-600">{formatCurrency(calculateTotal())}</td>
+                                        <td className="px-4 py-3"></td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

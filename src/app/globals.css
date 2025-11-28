@@ -68,3 +68,27 @@ body {
   transform: translateY(-4px);
   box-shadow: 0 12px 24px rgba(0, 70, 255, 0.15);
 }
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(143, 152, 177, 0.5) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(166, 176, 201, 0.6), rgba(143, 152, 177, 0.5));
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(129, 140, 166, 0.8), rgba(100, 116, 139, 0.7));
+}

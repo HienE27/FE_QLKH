@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -42,25 +42,39 @@ export default function DashboardPage() {
   const [aiAlerts, setAiAlerts] = useState<DashboardAlert[]>([]);
   const [aiSummary, setAiSummary] = useState<string>('');
   const [alertsLoading, setAlertsLoading] = useState(true);
+  const [aiServiceAvailable, setAiServiceAvailable] = useState(true);
 
-  useEffect(() => {
-    loadDashboardData();
-    loadAiAlerts();
-  }, []);
-
-  const loadAiAlerts = async () => {
+  const loadAiAlerts = useCallback(async () => {
     try {
       setAlertsLoading(true);
+      setAiServiceAvailable(true);
       const response = await getDashboardAlerts();
       setAiAlerts(response.alerts || []);
       setAiSummary(response.summary || '');
     } catch (err) {
-      console.error('Error loading AI alerts:', err);
+      // AI alerts là tính năng optional, không làm crash dashboard
+      console.warn('AI alerts service unavailable:', err);
       setAiAlerts([]);
+      setAiSummary('');
+      setAiServiceAvailable(false);
+      // Không hiển thị error cho user vì đây là tính năng optional
     } finally {
       setAlertsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Load dashboard data và AI alerts riêng biệt để lỗi AI không ảnh hưởng dashboard chính
+    loadDashboardData().catch((err) => {
+      console.error('Error loading dashboard data:', err);
+    });
+    
+    // Load AI alerts riêng, lỗi sẽ được handle trong loadAiAlerts
+    loadAiAlerts().catch((err) => {
+      // Đã được handle trong loadAiAlerts, chỉ log để debug
+      console.warn('Failed to load AI alerts:', err);
+    });
+  }, [loadAiAlerts]);
 
   const getAlertStyles = (type: string) => {
     switch (type) {
@@ -75,8 +89,8 @@ export default function DashboardPage() {
     }
   };
 
-  // Map icon names to emoji/icons (Vietnamese-friendly)
-  const getIconDisplay = (iconName?: string, type?: string) => {
+  // Map icon names to emoji/icons (Vietnamese-friendly) - memoized
+  const getIconDisplay = useCallback((iconName?: string, type?: string) => {
     if (!iconName) {
       // Default icon based on type
       switch (type) {
@@ -122,9 +136,9 @@ export default function DashboardPage() {
 
     // Return mapped emoji or default
     return iconMap[lowerIcon] || '📋';
-  };
+  }, []);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -214,7 +228,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'Chưa có';
@@ -356,7 +370,7 @@ export default function DashboardPage() {
         </div>
 
         {/* AI Alerts Section */}
-        {(aiAlerts.length > 0 || alertsLoading) && (
+        {aiServiceAvailable && (aiAlerts.length > 0 || alertsLoading) && (
           <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">

@@ -1,14 +1,323 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+
+type NavLinkItem = {
+  label: string;
+  href: string;
+  matches?: string[];
+};
+
+type NavGroup = {
+  title?: string;
+  colorClass: string;
+  links: NavLinkItem[];
+};
+
+type NavSection = {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  indicator: string;
+  accentCircle: string;
+  groups?: NavGroup[];
+};
+
+const matchPath = (pathname: string, patterns: string[] = []) => {
+  if (!patterns.length) return false;
+  return patterns.some(pattern => {
+    if (!pattern) return false;
+    const normalized = pattern.endsWith('*') ? pattern.slice(0, -1) : pattern;
+    if (pattern === '/dashboard') {
+      return pathname === '/' || pathname === '/dashboard';
+    }
+    if (pattern.endsWith('*') || normalized.endsWith('/')) {
+      return pathname.startsWith(normalized);
+    }
+    return pathname === normalized;
+  });
+};
+
+const navSections: NavSection[] = [
+  {
+    id: 'ncc',
+    label: 'Xuất - nhập với NCC',
+    indicator: 'from-blue-100 via-blue-50 to-transparent',
+    accentCircle: 'from-blue-200 via-blue-300 to-blue-400',
+    icon: (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none">
+        <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+    groups: [
+      {
+        title: 'Xuất kho',
+        colorClass: 'bg-blue-400',
+        links: [
+          {
+            label: 'Phiếu xuất kho',
+            href: '/dashboard/products/export/export-receipts',
+            matches: [
+              '/dashboard/products/export/export-receipts',
+              '/dashboard/products/export/create-export-receipt',
+              '/dashboard/products/export/view-export-receipt/',
+              '/dashboard/products/export/edit-export-receipt/',
+            ],
+          },
+        ],
+      },
+      {
+        title: 'Nhập kho',
+        colorClass: 'bg-blue-400',
+        links: [
+          {
+            label: 'Phiếu nhập kho',
+            href: '/dashboard/products/import/import-receipts',
+            matches: [
+              '/dashboard/products/import/import-receipts',
+              '/dashboard/products/import/create-import-receipt',
+              '/dashboard/products/import/view-import-receipt/',
+              '/dashboard/products/import/edit-import-receipt/',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'internal',
+    label: 'Xuất - nhập với Nội bộ',
+    indicator: 'from-blue-100 via-blue-50 to-transparent',
+    accentCircle: 'from-blue-300 via-blue-400 to-blue-500',
+    icon: (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="currentColor">
+        <circle cx="8" cy="8" r="3" />
+      </svg>
+    ),
+    groups: [
+      {
+        title: 'Xuất kho',
+        colorClass: 'bg-blue-500',
+        links: [
+          {
+            label: 'Lệnh xuất kho',
+            href: '/orders/export/export-orders',
+            matches: [
+              '/orders/export/export-orders',
+              '/orders/export/create-export-order',
+              '/orders/export/view-export-order/',
+              '/orders/export/edit-export-order/',
+            ],
+          },
+          {
+            label: 'Phiếu xuất kho',
+            href: '/orders/export/internal-export-receipts',
+            matches: [
+              '/orders/export/internal-export-receipts',
+              '/orders/export/create-internal-export-receipt',
+              '/orders/export/view-internal-export-receipt/',
+              '/orders/export/edit-internal-export-receipt/',
+            ],
+          },
+        ],
+      },
+      {
+        title: 'Nhập kho',
+        colorClass: 'bg-blue-500',
+        links: [
+          {
+            label: 'Lệnh nhập kho',
+            href: '/orders/import/import-orders',
+            matches: [
+              '/orders/import/import-orders',
+              '/orders/import/create-import-order',
+              '/orders/import/view-import-order/',
+              '/orders/import/edit-import-order/',
+            ],
+          },
+          {
+            label: 'Phiếu nhập kho',
+            href: '/orders/import/internal-import-receipts',
+            matches: [
+              '/orders/import/internal-import-receipts',
+              '/orders/import/create-internal-import-receipt',
+              '/orders/import/view-internal-import-receipt/',
+              '/orders/import/edit-internal-import-receipt/',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'sales',
+    label: 'Xuất - nhập với NVBH',
+    indicator: 'from-blue-100 via-blue-50 to-transparent',
+    accentCircle: 'from-blue-400 via-blue-500 to-blue-600',
+    icon: (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none">
+        <path d="M8 3l4 4-4 4M4 8h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    groups: [
+      {
+        title: 'Xuất kho',
+        colorClass: 'bg-blue-500',
+        links: [
+          {
+            label: 'Phiếu xuất kho',
+            href: '/dashboard/products/export-nvbh/export-nvbh-receipts',
+            matches: [
+              '/dashboard/products/export-nvbh/export-nvbh-receipts',
+              '/dashboard/products/export-nvbh/create-export-nvbh-receipt',
+              '/dashboard/products/export-nvbh/view-export-nvbh-receipt/',
+              '/dashboard/products/export-nvbh/edit-export-nvbh-receipt/',
+            ],
+          },
+        ],
+      },
+      {
+        title: 'Nhập kho',
+        colorClass: 'bg-blue-500',
+        links: [
+          {
+            label: 'Phiếu nhập kho',
+            href: '/dashboard/products/import-nvbh/import-nvbh-receipts',
+            matches: [
+              '/dashboard/products/import-nvbh/import-nvbh-receipts',
+              '/dashboard/products/import-nvbh/create-import-nvbh-receipt',
+              '/dashboard/products/import-nvbh/view-import-nvbh-receipt/',
+              '/dashboard/products/import-nvbh/edit-import-nvbh-receipt/',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'reports',
+    label: 'Báo cáo thống kê',
+    indicator: 'from-blue-100 via-blue-50 to-transparent',
+    accentCircle: 'from-blue-300 via-blue-400 to-blue-500',
+    icon: (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="currentColor">
+        <rect x="2" y="10" width="2.5" height="4" />
+        <rect x="6" y="6" width="2.5" height="8" />
+        <rect x="10" y="3" width="2.5" height="11" />
+      </svg>
+    ),
+    groups: [
+      {
+        colorClass: 'bg-blue-400',
+        links: [
+          {
+            label: 'Báo cáo nhập kho',
+            href: '/reports/import-report',
+            matches: ['/reports/import-report'],
+          },
+          {
+            label: 'Báo cáo xuất kho',
+            href: '/reports/export-report',
+            matches: ['/reports/export-report'],
+          },
+          {
+            label: 'Báo cáo tồn kho',
+            href: '/reports/inventory-report',
+            matches: ['/reports/inventory-report'],
+          },
+          {
+            label: 'Báo cáo xuất nhập tồn',
+            href: '/reports/stock-movement-report',
+            matches: ['/reports/stock-movement-report'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'categories',
+    label: 'Danh mục',
+    indicator: 'from-blue-100 via-blue-50 to-transparent',
+    accentCircle: 'from-blue-300 via-blue-400 to-blue-500',
+    icon: (
+      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none">
+        <path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+    groups: [
+      {
+        colorClass: 'bg-blue-400',
+        links: [
+          {
+            label: 'Nguồn hàng xuất/nhập',
+            href: '/categories/suppliers',
+            matches: [
+              '/categories/suppliers',
+              '/categories/suppliers/create',
+              '/categories/suppliers/edit/',
+              '/categories/suppliers/detail/',
+            ],
+          },
+          {
+            label: 'Danh mục hàng hóa',
+            href: '/dashboard/products',
+            matches: [
+              '/dashboard/products',
+              '/dashboard/products/create',
+              '/dashboard/products/edit/',
+              '/dashboard/products/detail/',
+            ],
+          },
+          {
+            label: 'Quản lý danh mục',
+            href: '/categories/categories',
+            matches: [
+              '/categories/categories',
+              '/categories/categories/create',
+              '/categories/categories/edit/',
+              '/categories/categories/detail/',
+            ],
+          },
+          {
+            label: 'Quản lý đơn vị tính',
+            href: '/categories/units',
+            matches: [
+              '/categories/units',
+              '/categories/units/create',
+              '/categories/units/edit/',
+              '/categories/units/detail/',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+const quickLinks: NavLinkItem[] = [
+  {
+    label: 'Quản lý kiểm kê',
+    href: '/inventory/inventory-checks',
+    matches: [
+      '/inventory/inventory-checks',
+      '/inventory/create-inventory-check',
+      '/inventory/view-inventory-check/',
+      '/inventory/edit-inventory-check/',
+    ],
+  },
+  {
+    label: 'Trợ lý AI',
+    href: '/ai',
+    matches: ['/ai'],
+  },
+];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
 
-  // Load expanded menus từ localStorage + auto mở menu đúng theo URL hiện tại
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -31,15 +340,7 @@ export default function Sidebar() {
         initial.push('categories');
       }
 
-      if (pathname.startsWith('/categories/units')) {
-        initial.push('categories');
-      }
-
-      if (pathname.startsWith('/orders')) {
-        initial.push('internal');
-      }
-
-      if (pathname.startsWith('/inventory')) {
+      if (pathname.startsWith('/orders') || pathname.startsWith('/inventory')) {
         initial.push('internal');
       }
 
@@ -64,14 +365,12 @@ export default function Sidebar() {
       }
     };
 
-    // Schedule sang "tick" sau ⇒ không bị rule "set-state-in-effect" soi
     setTimeout(initMenus, 0);
 
     return () => {
       mounted = false;
     };
   }, [pathname]);
-
 
   const toggleMenu = (menu: string) => {
     setExpandedMenus(prev => {
@@ -85,492 +384,174 @@ export default function Sidebar() {
     });
   };
 
+  const isActiveSection = (section: NavSection) => {
+    if (!section.groups) return false;
+    return section.groups.some(group =>
+      group.links.some(link => matchPath(pathname, link.matches ?? [link.href]))
+    );
+  };
+
+  const overviewActive = matchPath(pathname, ['/dashboard']);
+
   return (
-    <aside className="fixed top-[113px] left-[17px] w-[350px] h-[calc(100vh-130px)] bg-white overflow-y-auto shadow-2xl rounded-xl animate-slide-in border border-gray-100">
-      {/* User Profile */}
-      <div className="p-5 border-b border-gray-100 bg-gradient-to-br from-blue-50 to-white">
-        <div className="flex items-center gap-3">
-          <div className="w-[70px] h-[70px] rounded-full bg-gradient-to-br from-blue-400 via-purple-400 to-pink-400 overflow-hidden shadow-lg ring-4 ring-blue-100 transition-transform hover:scale-105 flex-shrink-0">
-            <div className="w-full h-full flex items-center justify-center text-white text-xl font-bold">
-              MH
-            </div>
+    <aside className="fixed top-[100px] left-[24px] w-[320px] h-[calc(100vh-120px)] rounded-2xl bg-white/95 border border-slate-200/50 shadow-[0_8px_32px_rgba(0,0,0,0.06)] overflow-hidden text-slate-700 font-['Inter',sans-serif] backdrop-blur-md">
+      {/* User Profile Section */}
+      <div className="relative p-5 border-b border-slate-100/80">
+        <div className="relative flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#2563EB] to-[#1E40AF] flex items-center justify-center text-white text-sm font-semibold shadow-sm transition-transform hover:scale-105">
+            MH
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-800 truncate">Nguyễn Văn A</p>
-            <p className="text-xs text-gray-500">Quản lý kho</p>
+            <p className="text-sm font-semibold text-[#1E293B] truncate leading-tight">Nguyễn Văn A</p>
+            <p className="text-xs text-[#64748B] truncate mt-0.5 leading-tight">admin@warehouse.com</p>
           </div>
-          <button
-            className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md hover:shadow-lg transition-all hover:scale-110 flex-shrink-0"
-            aria-label="Thêm mới"
-            title="Thêm mới"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M7 3V11M3 7H11"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
         </div>
       </div>
 
-      {/* Menu Items */}
-      <nav className="p-3">
-        {/* Tổng quan */}
+      <nav className="relative px-4 py-4 space-y-2 overflow-y-auto h-[calc(100%-120px)] custom-scrollbar scroll-smooth">
         <Link
           href="/dashboard"
-          className={`w-full text-left px-3 py-2.5 rounded-lg mb-1.5 transition-all block ${pathname === '/dashboard' || pathname === '/'
-            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg scale-[1.02]'
-            : 'hover:bg-gray-50 text-gray-700'
+          className={`group flex items-center gap-3.5 px-4 py-3 rounded-lg transition-all duration-200 relative ${
+            overviewActive
+              ? 'bg-blue-50/80 text-[#2563EB]'
+              : 'text-[#475569] hover:bg-slate-50/60 hover:text-[#2563EB]'
             }`}
         >
-          <div className="flex items-center gap-2.5">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-              <rect x="2" y="2" width="6" height="6" rx="1" />
-              <rect x="10" y="2" width="6" height="6" rx="1" />
-              <rect x="2" y="10" width="6" height="6" rx="1" />
-              <rect x="10" y="10" width="6" height="6" rx="1" />
-            </svg>
-            <span className="text-sm font-semibold">Tổng quan</span>
-          </div>
-        </Link>
-
-        {/* Xuất - nhập với NCC */}
-        <div className="mb-1.5">
-          <button
-            onClick={() => toggleMenu('ncc')}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 rounded-lg transition-all group"
-          >
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 2V10M2 6H10" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span className="flex-1 text-[#0b08ab] text-sm font-semibold group-hover:text-blue-700">
-              Xuất - nhập với NCC
-            </span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              className={`transition-transform flex-shrink-0 ${expandedMenus.includes('ncc') ? 'rotate-180' : ''
-                }`}
-            >
-              <path d="M3 5L7 9L11 5" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-          {expandedMenus.includes('ncc') && (
-            <div className="ml-8 space-y-1 mt-1 animate-fade-in">
-              <div className="border-l-2 border-blue-200 pl-3 py-1.5 space-y-1.5">
-                <div className="flex items-center gap-2 text-[#0b08ab] hover:text-blue-700 cursor-pointer transition-colors py-1">
-                  <div className="w-1 h-1 rounded-full bg-blue-400"></div>
-                  <span className="text-xs font-medium">Xuất kho</span>
-                </div>
-                <Link
-                  href="/dashboard/products/export/export-receipts"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/dashboard/products/export/export-receipts' ||
-                    pathname === '/dashboard/products/export/create-export-receipt' ||
-                    pathname?.startsWith('/dashboard/products/export/view-export-receipt/') ||
-                    pathname?.startsWith('/dashboard/products/export/edit-export-receipt/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Phiếu xuất kho
-                </Link>
-                <div className="flex items-center gap-2 text-[#0b08ab] hover:text-blue-700 cursor-pointer transition-colors py-1 mt-2">
-                  <div className="w-1 h-1 rounded-full bg-blue-400"></div>
-                  <span className="text-xs font-medium">Nhập kho</span>
-                </div>
-                <Link
-                  href="/dashboard/products/import/import-receipts"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/dashboard/products/import/import-receipts' ||
-                    pathname === '/dashboard/products/import/create-import-receipt' ||
-                    pathname?.startsWith('/dashboard/products/import/view-import-receipt/') ||
-                    pathname?.startsWith('/dashboard/products/import/edit-import-receipt/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Phiếu nhập kho
-                </Link>
-              </div>
-            </div>
+          {overviewActive && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#2563EB] rounded-r-full" />
           )}
-        </div>
-
-        {/* Xuất - nhập với Nội bộ */}
-        <div className="mb-1.5">
-          <button
-            onClick={() => toggleMenu('internal')}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 rounded-lg transition-all group"
-          >
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <circle cx="6" cy="6" r="4" stroke="#0b08ab" strokeWidth="1.5" />
-              </svg>
-            </div>
-            <span className="flex-1 text-[#0b08ab] text-sm font-semibold group-hover:text-blue-700">
-              Xuất - nhập với Nội bộ
-            </span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              className={`transition-transform flex-shrink-0 ${expandedMenus.includes('internal') ? 'rotate-180' : ''
-                }`}
-            >
-              <path d="M3 5L7 9L11 5" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-          {expandedMenus.includes('internal') && (
-            <div className="ml-8 space-y-1 mt-1 animate-fade-in">
-              <div className="border-l-2 border-purple-200 pl-3 py-1.5 space-y-1.5">
-                <div className="flex items-center gap-2 text-[#0b08ab] hover:text-blue-700 cursor-pointer transition-colors py-1">
-                  <div className="w-1 h-1 rounded-full bg-purple-400"></div>
-                  <span className="text-xs font-medium">Xuất kho</span>
-                </div>
-                <Link
-                  href="/orders/export/export-orders"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/orders/export/export-orders' ||
-                    pathname === '/orders/export/create-export-order' ||
-                    pathname?.startsWith('/orders/export/view-export-order/') ||
-                    pathname?.startsWith('/orders/export/edit-export-order/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Lệnh xuất kho
-                </Link>
-                <Link
-                  href="/orders/export/internal-export-receipts"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/orders/export/internal-export-receipts' ||
-                    pathname === '/orders/export/create-internal-export-receipt' ||
-                    pathname?.startsWith('/orders/export/view-internal-export-receipt/') ||
-                    pathname?.startsWith('/orders/export/edit-internal-export-receipt/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Phiếu xuất kho
-                </Link>
-                <div className="flex items-center gap-2 text-[#0b08ab] hover:text-blue-700 cursor-pointer transition-colors py-1 mt-2">
-                  <div className="w-1 h-1 rounded-full bg-purple-400"></div>
-                  <span className="text-xs font-medium">Nhập kho</span>
-                </div>
-                <Link
-                  href="/orders/import/import-orders"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/orders/import/import-orders' ||
-                    pathname === '/orders/import/create-import-order' ||
-                    pathname?.startsWith('/orders/import/view-import-order/') ||
-                    pathname?.startsWith('/orders/import/edit-import-order/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Lệnh nhập kho
-                </Link>
-                <Link
-                  href="/orders/import/internal-import-receipts"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/orders/import/internal-import-receipts' ||
-                    pathname === '/orders/import/create-internal-import-receipt' ||
-                    pathname?.startsWith('/orders/import/view-internal-import-receipt/') ||
-                    pathname?.startsWith('/orders/import/edit-internal-import-receipt/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Phiếu nhập kho
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Xuất - nhập với NVBH */}
-        <div className="mb-1.5">
-          <button
-            onClick={() => toggleMenu('sales')}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 rounded-lg transition-all group"
-          >
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-pink-100 to-pink-200 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6L6 2L10 6M6 2V10" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span className="flex-1 text-[#0b08ab] text-sm font-semibold group-hover:text-blue-700">
-              Xuất - nhập với NVBH
-            </span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              className={`transition-transform flex-shrink-0 ${expandedMenus.includes('sales') ? 'rotate-180' : ''
-                }`}
-            >
-              <path d="M3 5L7 9L11 5" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-          {expandedMenus.includes('sales') && (
-            <div className="ml-8 space-y-1 mt-1 animate-fade-in">
-              <div className="border-l-2 border-pink-200 pl-3 py-1.5 space-y-1.5">
-                <div className="flex items-center gap-2 text-[#0b08ab] hover:text-blue-700 cursor-pointer transition-colors py-1">
-                  <div className="w-1 h-1 rounded-full bg-pink-400"></div>
-                  <span className="text-xs font-medium">Xuất kho</span>
-                </div>
-                <Link
-                  href="/dashboard/products/export-nvbh/export-nvbh-receipts"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/dashboard/products/export-nvbh/export-nvbh-receipts' ||
-                    pathname === '/dashboard/products/export-nvbh/create-export-nvbh-receipt' ||
-                    pathname?.startsWith('/dashboard/products/export-nvbh/view-export-nvbh-receipt/') ||
-                    pathname?.startsWith('/dashboard/products/export-nvbh/edit-export-nvbh-receipt/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Phiếu xuất kho
-                </Link>
-                <div className="flex items-center gap-2 text-[#0b08ab] hover:text-blue-700 cursor-pointer transition-colors py-1 mt-2">
-                  <div className="w-1 h-1 rounded-full bg-pink-400"></div>
-                  <span className="text-xs font-medium">Nhập kho</span>
-                </div>
-                <Link
-                  href="/dashboard/products/import-nvbh/import-nvbh-receipts"
-                  className={`block text-xs ml-3 cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/dashboard/products/import-nvbh/import-nvbh-receipts' ||
-                    pathname === '/dashboard/products/import-nvbh/create-import-nvbh-receipt' ||
-                    pathname?.startsWith('/dashboard/products/import-nvbh/view-import-nvbh-receipt/') ||
-                    pathname?.startsWith('/dashboard/products/import-nvbh/edit-import-nvbh-receipt/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Phiếu nhập kho
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="h-px bg-gray-200 my-2"></div>
-
-        {/* Quản lý kiểm kê */}
-        <Link
-          href="/inventory/inventory-checks"
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all group mb-1.5 ${pathname === '/inventory/inventory-checks' ||
-            pathname === '/inventory/create-inventory-check' ||
-            pathname?.startsWith('/inventory/view-inventory-check/') ||
-            pathname?.startsWith('/inventory/edit-inventory-check/')
-            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg scale-[1.02]'
-            : 'hover:bg-blue-50'
-            }`}
-        >
-          <div className="w-5 h-5 rounded bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center flex-shrink-0">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <rect x="2" y="2" width="8" height="8" rx="1" stroke="#0b08ab" strokeWidth="1.5" />
-              <path d="M4 6L5.5 7.5L8 4.5" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
+          <div className="w-5 h-5 flex items-center justify-center">
+            <svg viewBox="0 0 20 20" className="w-5 h-5" fill="currentColor">
+              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
             </svg>
           </div>
-          <span
-            className={`flex-1 text-sm font-semibold ${pathname === '/inventory/inventory-checks' ||
-              pathname === '/inventory/create-inventory-check' ||
-              pathname?.startsWith('/inventory/view-inventory-check/') ||
-              pathname?.startsWith('/inventory/edit-inventory-check/')
-              ? 'text-white'
-              : 'text-[#0b08ab] group-hover:text-blue-700'
-              }`}
-          >
-            Quản lý kiểm kê
+          <span className={`flex-1 text-[14px] font-medium ${overviewActive ? 'text-[#2563EB]' : 'text-[#475569]'}`}>
+            Tổng quan
           </span>
         </Link>
 
-        {/* Báo cáo thống kê */}
-        <div className="mb-1.5">
-          <button
-            onClick={() => toggleMenu('reports')}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 rounded-lg transition-all group"
-          >
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <rect x="2" y="7" width="2" height="3" fill="#0b08ab" />
-                <rect x="5" y="4" width="2" height="6" fill="#0b08ab" />
-                <rect x="8" y="2" width="2" height="8" fill="#0b08ab" />
-              </svg>
-            </div>
-            <span className="flex-1 text-[#0b08ab] text-sm font-semibold group-hover:text-blue-700">
-              Báo cáo thống kê
-            </span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              className={`transition-transform flex-shrink-0 ${expandedMenus.includes('reports') ? 'rotate-180' : ''
-                }`}
-            >
-              <path d="M3 5L7 9L11 5" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-          {expandedMenus.includes('reports') && (
-            <div className="ml-8 space-y-1 mt-1 animate-fade-in">
-              <div className="border-l-2 border-orange-200 pl-3 py-1.5 space-y-1.5">
-                <Link
-                  href="/reports/import-report"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/reports/import-report'
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
+        <div className="space-y-1">
+          {navSections.map(section => {
+            const isExpanded = expandedMenus.includes(section.id);
+            const sectionActive = isActiveSection(section);
+            return (
+              <div key={section.id} className="relative">
+                <button
+                  onClick={() => toggleMenu(section.id)}
+                  className={`group w-full flex items-center gap-3.5 px-4 py-3 rounded-lg transition-all duration-200 text-left relative ${
+                    sectionActive
+                      ? 'bg-slate-50/60 text-[#2563EB]'
+                      : 'hover:bg-slate-50/40 text-[#475569]'
                     }`}
                 >
-                  Báo cáo nhập kho
-                </Link>
-                <Link
-                  href="/reports/export-report"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/reports/export-report'
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
+                  {sectionActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#2563EB] rounded-r-full" />
+                  )}
+                  <div className={`w-5 h-5 flex items-center justify-center transition-colors duration-200 ${
+                    sectionActive ? 'text-[#2563EB]' : 'text-[#64748B] group-hover:text-[#2563EB]'
+                  }`}>
+                    {section.icon}
+                  </div>
+                  <span className={`flex-1 text-[14px] font-medium transition-colors duration-200 ${
+                    sectionActive ? 'text-[#2563EB]' : 'text-[#475569] group-hover:text-[#2563EB]'
+                  }`}>
+                    {section.label}
+                  </span>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 20 20"
+                    className={`transition-all duration-200 ${
+                      isExpanded 
+                        ? 'rotate-180 text-[#2563EB]' 
+                        : 'text-[#94A3B8] group-hover:text-[#2563EB]'
                     }`}
-                >
-                  Báo cáo xuất kho
-                </Link>
-                <Link
-                  href="/reports/inventory-report"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/reports/inventory-report'
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Báo cáo tồn kho
-                </Link>
-                <Link
-                  href="/reports/stock-movement-report"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/reports/stock-movement-report'
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Báo cáo xuất nhập tồn
-                </Link>
+                  >
+                    <path
+                      d="M5 7.5L10 12.5L15 7.5"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                  </svg>
+                </button>
+                {isExpanded && section.groups && (
+                  <div className="mt-1.5 space-y-1.5 pl-8 animate-fade-in border-l border-slate-100 ml-2">
+                    {section.groups.map((group, idx) => (
+                      <div key={group.title ?? idx} className="space-y-1">
+                        {group.title && (
+                          <div className="px-3 py-1.5 text-[11px] uppercase tracking-wider text-[#94A3B8] font-semibold">
+                            {group.title}
+                          </div>
+                        )}
+                        <div className="space-y-0.5">
+                          {group.links.map(link => {
+                            const active = matchPath(pathname, link.matches ?? [link.href]);
+                            return (
+                              <Link
+                                key={link.label}
+                                href={link.href}
+                                className={`group/link flex items-center gap-3 px-3.5 py-2.5 text-[13px] rounded-md transition-all duration-200 relative ${
+                                  active
+                                    ? 'bg-blue-50/60 text-[#2563EB] font-medium'
+                                    : 'text-[#64748B] hover:bg-slate-50/50 hover:text-[#2563EB]'
+                                  }`}
+                              >
+                                {active && (
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#2563EB] rounded-r-full" />
+                                )}
+                                <span className="flex-1">{link.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
 
-        {/* Danh mục */}
-        <div className="mb-1.5">
-          <button
-            onClick={() => toggleMenu('categories')}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-blue-50 rounded-lg transition-all group"
-          >
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 3H10M2 6H10M2 9H10" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span className="flex-1 text-[#0b08ab] text-sm font-semibold group-hover:text-blue-700">
-              Danh mục
-            </span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 14 14"
-              fill="none"
-              className={`transition-transform flex-shrink-0 ${expandedMenus.includes('categories') ? 'rotate-180' : ''
-                }`}
-            >
-              <path d="M3 5L7 9L11 5" stroke="#0b08ab" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
-
-          {expandedMenus.includes('categories') && (
-            <div className="ml-8 space-y-1 mt-1 animate-fade-in">
-              <div className="border-l-2 border-green-200 pl-3 py-1.5 space-y-1.5">
-                {/* Nguồn hàng xuất/nhập */}
-                <Link
-                  href="/categories/suppliers"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/categories/suppliers' ||
-                    pathname === '/categories/suppliers/create' ||
-                    pathname?.startsWith('/categories/suppliers/edit/') ||
-                    pathname?.startsWith('/categories/suppliers/detail/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Nguồn hàng xuất/nhập
-                </Link>
-
-                {/* Danh mục hàng hóa */}
-                <Link
-                  href="/dashboard/products"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/dashboard/products' ||
-                    pathname === '/dashboard/products/create' ||
-                    pathname?.startsWith('/dashboard/products/edit/') ||
-                    pathname?.startsWith('/dashboard/products/detail/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Danh mục hàng hóa
-                </Link>
-
-                {/* Danh mục */}
-                <Link
-                  href="/categories/categories"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/categories/categories' ||
-                    pathname === '/categories/categories/create' ||
-                    pathname?.startsWith('/categories/categories/edit/') ||
-                    pathname?.startsWith('/categories/categories/detail/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Quản lý danh mục
-                </Link>
-
-                {/* Đơn vị tính */}
-                <Link
-                  href="/categories/units"
-                  className={`block text-xs cursor-pointer transition-all py-1 px-2 rounded ${pathname === '/categories/units' ||
-                    pathname === '/categories/units/create' ||
-                    pathname?.startsWith('/categories/units/edit/') ||
-                    pathname?.startsWith('/categories/units/detail/')
-                    ? 'bg-blue-100 text-blue-700 font-semibold'
-                    : 'text-[#0b08ab] hover:text-blue-700 hover:bg-blue-50'
-                    }`}
-                >
-                  Quản lý đơn vị tính
-                </Link>
-              </div>
-            </div>
-          )}
+        <div className="space-y-1.5 border-t border-slate-100/80 pt-4 mt-4">
+          {quickLinks.map((link, index) => {
+            const active = matchPath(pathname, link.matches ?? [link.href]);
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                className={`group flex items-center gap-3.5 px-4 py-3 rounded-lg text-[14px] font-medium transition-all duration-200 relative ${
+                  active
+                    ? 'bg-blue-50/80 text-[#2563EB]'
+                    : 'text-[#475569] hover:bg-slate-50/60 hover:text-[#2563EB]'
+                  }`}
+              >
+                {active && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#2563EB] rounded-r-full" />
+                )}
+                <div className="w-5 h-5 flex items-center justify-center">
+                  {index === 0 ? (
+                    <svg viewBox="0 0 20 20" className="w-5 h-5" fill="currentColor">
+                      <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                      <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 20 20" className="w-5 h-5" fill="currentColor">
+                      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                      <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                    </svg>
+                  )}
+                </div>
+                <span className={`flex-1 ${active ? 'text-[#2563EB]' : 'text-[#475569]'}`}>
+                  {link.label}
+                </span>
+              </Link>
+            );
+          })}
         </div>
-
-        <div className="h-px bg-gray-200 my-2"></div>
-
-        {/* AI Assistant */}
-        <Link
-          href="/ai"
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all group mb-1.5 ${
-            pathname === '/ai'
-              ? 'bg-gradient-to-r from-sky-500 to-sky-600 text-white shadow-lg scale-[1.02]'
-              : 'hover:bg-sky-50'
-          }`}
-        >
-          <div className="w-5 h-5 rounded bg-gradient-to-br from-sky-100 to-sky-200 flex items-center justify-center flex-shrink-0">
-            <span className="text-[11px] font-semibold text-sky-700">AI</span>
-          </div>
-          <span
-            className={`flex-1 text-sm font-semibold ${
-              pathname === '/ai' ? 'text-white' : 'text-[#0b08ab] group-hover:text-blue-700'
-            }`}
-          >
-            Trợ lý AI
-          </span>
-        </Link>
-
       </nav>
     </aside>
   );

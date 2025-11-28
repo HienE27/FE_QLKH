@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -68,7 +68,7 @@ export default function ImportReceiptsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(7);
 
-    const fetchSuppliers = async () => {
+    const fetchSuppliers = useCallback(async () => {
         try {
             setLoadingSuppliers(true);
             const { getSuppliers } = await import('@/services/supplier.service');
@@ -79,9 +79,9 @@ export default function ImportReceiptsPage() {
         } finally {
             setLoadingSuppliers(false);
         }
-    };
+    }, []);
 
-    const loadImports = async () => {
+    const loadImports = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -111,50 +111,58 @@ export default function ImportReceiptsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [statusFilter, codeFilter, fromDate, toDate, supplierFilter]);
 
     useEffect(() => {
-        fetchSuppliers();
-        loadImports();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        // Batch load suppliers and imports
+        Promise.all([fetchSuppliers(), loadImports()]).catch((err) => {
+            console.error('Lỗi khi tải dữ liệu:', err);
+            // Các hàm fetchSuppliers và loadImports đã tự xử lý error state
+        });
+    }, [fetchSuppliers, loadImports]);
 
-    const handleSort = (field: 'value' | 'datetime') => {
+    // Memoize sorted data
+    const sortedData = useMemo(() => {
+        if (!sortField) return data;
+        
+        return [...data].sort((a, b) => {
+            if (sortField === 'value') {
+                const valueA = a.totalValue || 0;
+                const valueB = b.totalValue || 0;
+                return sortDirection === 'asc' ? valueA - valueB : valueB - valueA;
+            } else {
+                const dateA = new Date(a.importsDate).getTime();
+                const dateB = new Date(b.importsDate).getTime();
+                return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+            }
+        });
+    }, [data, sortField, sortDirection]);
+
+    const handleSort = useCallback((field: 'value' | 'datetime') => {
         const newDirection =
             sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
         setSortField(field);
         setSortDirection(newDirection);
-
-        const sorted = [...data].sort((a, b) => {
-            if (field === 'value') {
-                const valueA = a.totalValue || 0;
-                const valueB = b.totalValue || 0;
-                return newDirection === 'asc' ? valueA - valueB : valueB - valueA;
-            } else {
-                const dateA = new Date(a.importsDate).getTime();
-                const dateB = new Date(b.importsDate).getTime();
-                return newDirection === 'asc' ? dateA - dateB : dateB - dateA;
-            }
-        });
-
-        setData(sorted);
-    };
+    }, [sortField, sortDirection]);
 
     const handleSearchClick = () => {
         setCurrentPage(1);
         loadImports();
     };
 
-    // Supplier map
-    const supplierMap = new Map<number, string>();
-    suppliers.forEach((s) => supplierMap.set(s.id, s.name));
+    // Memoize supplier map
+    const supplierMap = useMemo(() => {
+        const map = new Map<number, string>();
+        suppliers.forEach((s) => map.set(s.id, s.name));
+        return map;
+    }, [suppliers]);
 
-    // Pagination calculations
-    const totalItems = data.length;
+    // Pagination calculations with sorted data
+    const totalItems = sortedData.length;
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const currentData = data.slice(startIndex, endIndex);
+    const currentData = sortedData.slice(startIndex, endIndex);
     const displayStart = totalItems === 0 ? 0 : startIndex + 1;
     const displayEnd = Math.min(endIndex, totalItems);
 
@@ -436,7 +444,7 @@ export default function ImportReceiptsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.length === 0 ? (
+                                {sortedData.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={7}

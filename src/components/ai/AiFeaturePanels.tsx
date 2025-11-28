@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+// Dynamic imports for heavy libraries - loaded only when needed
 import {
   ComboSuggestionResponse,
   ReportRequest,
@@ -216,7 +214,8 @@ function translatePeriod(period?: ReportRequest['period']) {
   }
 }
 
-function buildExcelWorkbook(report: ReportResponse, period?: ReportRequest['period']) {
+async function buildExcelWorkbook(report: ReportResponse, period?: ReportRequest['period']) {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.utils.book_new();
   const summaryRows: Array<Array<string>> = [
     ['Tiêu đề', report.title ?? 'Báo cáo AI'],
@@ -310,7 +309,7 @@ export default function AiFeaturePanels() {
   const [comboData, setComboData] = useState<ComboSuggestionResponse | null>(null);
   const [comboLoading, setComboLoading] = useState(false);
 
-  const fetchTrend = async () => {
+  const fetchTrend = useCallback(async () => {
     setTrendLoading(true);
     setTrendError(null);
     try {
@@ -322,12 +321,11 @@ export default function AiFeaturePanels() {
     } finally {
       setTrendLoading(false);
     }
-  };
+  }, [trendPeriod]);
 
   useEffect(() => {
     void fetchTrend();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [trendPeriod]);
 
   const trendStats = useMemo(() => {
     if (!trendData) return { totalRevenue: 0, totalOrders: 0, maxGrowth: 0 };
@@ -385,6 +383,12 @@ export default function AiFeaturePanels() {
     }
 
     if (format === 'PDF' && exportBody) {
+      // Dynamic import for heavy libraries
+      const [{ default: jsPDF }, html2canvas] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas'),
+      ]);
+      
       const doc = new jsPDF('p', 'pt', 'a4');
       const iframe = await createIsolatedExportNode(exportBody);
       try {
@@ -393,7 +397,7 @@ export default function AiFeaturePanels() {
         const content = frameDoc.querySelector('.report-wrapper') as HTMLElement;
         if (!content) throw new Error('Không tìm thấy nội dung báo cáo');
 
-        const canvas = await html2canvas(content, {
+        const canvas = await html2canvas.default(content, {
           scale: 2,
           logging: false,
           backgroundColor: '#ffffff',
@@ -430,7 +434,9 @@ export default function AiFeaturePanels() {
     }
 
     if (format === 'EXCEL') {
-      const workbook = buildExcelWorkbook(reportData, reportRequest.period);
+      // Dynamic import for XLSX
+      const workbook = await buildExcelWorkbook(reportData, reportRequest.period);
+      const XLSX = await import('xlsx');
       XLSX.writeFile(workbook, `${title}.xlsx`);
     }
   };

@@ -1,0 +1,4 @@
+# Ensure .env files are never committed
+.env* filter=git-crypt diff=git-crypt
+*.env filter=git-crypt diff=git-crypt
+

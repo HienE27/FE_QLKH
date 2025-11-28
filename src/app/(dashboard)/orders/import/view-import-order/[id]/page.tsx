@@ -90,7 +90,11 @@ export default function ViewImportOrder() {
                                 unit: item.unit || 'Cái',
                             };
                         } catch (err) {
-                            console.error('Failed to fetch product:', item.productId, err);
+                            // Sản phẩm có thể đã bị xóa, không cần log error
+                            const errorMessage = err instanceof Error ? err.message : String(err);
+                            if (!errorMessage.includes('Không tìm thấy')) {
+                                console.warn('Failed to fetch product:', item.productId, err);
+                            }
                             return {
                                 ...item,
                                 productCode: `ID: ${item.productId}`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -53,34 +53,63 @@ export default function ExportReportPage() {
     const [sortDate, setSortDate] = useState<'none' | 'asc' | 'desc'>('none');
     const [sortValue, setSortValue] = useState<'none' | 'asc' | 'desc'>('none');
 
-    // Use pagination hook
-    const {
-        currentData,
-        currentPage,
-        totalPages,
-        paginationInfo,
-        goToPage,
-        resetPage,
-    } = usePagination(filteredData, 10);
-
-    // Load all suppliers (NCC, INTERNAL, NVBH)
-    useEffect(() => {
-        const fetchSuppliers = async () => {
-            try {
-                const [nccList, internalList, nvbhList] = await Promise.all([
-                    getSuppliers('NCC'),
-                    getSuppliers('INTERNAL'),
-                    getSuppliers('NVBH'),
-                ]);
-                setSuppliers([...nccList, ...internalList, ...nvbhList]);
-            } catch (e) {
-                console.error(e);
-            }
-        };
-        fetchSuppliers();
+    // Load all suppliers (NCC, INTERNAL, NVBH) - memoized
+    const fetchSuppliers = useCallback(async () => {
+        try {
+            const [nccList, internalList, nvbhList] = await Promise.all([
+                getSuppliers('NCC'),
+                getSuppliers('INTERNAL'),
+                getSuppliers('NVBH'),
+            ]);
+            setSuppliers([...nccList, ...internalList, ...nvbhList]);
+        } catch (e) {
+            console.error(e);
+        }
     }, []);
 
-    const loadData = async () => {
+    useEffect(() => {
+        fetchSuppliers();
+    }, [fetchSuppliers]);
+
+    // Memoize sorting function - MUST be declared before loadData
+    const applySorting = useCallback((data: NormalizedExport[]) => {
+        let sorted = [...data];
+
+        // Sort by supplier name
+        if (sortSupplier !== 'none') {
+            sorted.sort((a, b) => {
+                const nameA = (a.supplierName || '').toLowerCase();
+                const nameB = (b.supplierName || '').toLowerCase();
+                if (sortSupplier === 'asc') {
+                    return nameA.localeCompare(nameB, 'vi');
+                } else {
+                    return nameB.localeCompare(nameA, 'vi');
+                }
+            });
+        }
+
+        // Sort by date
+        if (sortDate !== 'none') {
+            sorted.sort((a, b) => {
+                const dateA = new Date(a.exportsDate).getTime();
+                const dateB = new Date(b.exportsDate).getTime();
+                return sortDate === 'asc' ? dateA - dateB : dateB - dateA;
+            });
+        }
+
+        // Sort by value
+        if (sortValue !== 'none') {
+            sorted.sort((a, b) => {
+                return sortValue === 'asc'
+                    ? a.totalValue - b.totalValue
+                    : b.totalValue - a.totalValue;
+            });
+        }
+
+        return sorted;
+    }, [sortSupplier, sortDate, sortValue]);
+
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -92,23 +121,15 @@ export default function ExportReportPage() {
                 toDate: filterToDate || undefined,
             };
 
-            // Gộp dữ liệu từ cả 3 nguồn
-            const [supplierExports, internalExports, staffExports] = await Promise.all([
+            // Batch tất cả API calls - gộp cả suppliers vào đây
+            const [supplierExports, internalExports, staffExports, allSuppliers] = await Promise.all([
                 getSupplierExports(params),
                 getInternalExports(params),
                 getStaffExports(params),
+                getSuppliers(), // Lấy tất cả suppliers để map tên
             ]);
 
-            // Lấy tất cả suppliers (bao gồm cả NCC, INTERNAL, NVBH) để map tên
-            const allSuppliers = await getSuppliers(); // Lấy tất cả không filter
             const supplierMap = new Map(allSuppliers.map(s => [s.id, s.name]));
-
-            console.log('🔍 Debug Export Report:');
-            console.log('- Total supplierExports:', supplierExports.length);
-            console.log('- Total internalExports:', internalExports.length);
-            console.log('- Total staffExports (NVBH):', staffExports.length);
-            console.log('- Total suppliers:', allSuppliers.length);
-            console.log('- Supplier Map:', supplierMap);
 
             // Normalize data - NCC exports
             const normalizedSupplierExports: NormalizedExport[] = supplierExports.map(item => ({
@@ -150,10 +171,6 @@ export default function ExportReportPage() {
                 exportType: 'NVBH' as const,
             }));
 
-            console.log('- NCC exports:', normalizedSupplierExports.length);
-            console.log('- Internal exports:', normalizedInternalExports.length);
-            console.log('- NVBH exports:', normalizedStaffExports.length);
-
             const allExports: NormalizedExport[] = [
                 ...normalizedSupplierExports,
                 ...normalizedInternalExports,
@@ -175,51 +192,13 @@ export default function ExportReportPage() {
             filtered = applySorting(filtered);
 
             setFilteredData(filtered);
-            resetPage();
         } catch (err) {
             console.error('❌ Error loading exports:', err);
             setError(err instanceof Error ? err.message : 'Lỗi tải dữ liệu');
         } finally {
             setLoading(false);
         }
-    };
-
-    const applySorting = (data: NormalizedExport[]) => {
-        let sorted = [...data];
-
-        // Sort by supplier name
-        if (sortSupplier !== 'none') {
-            sorted.sort((a, b) => {
-                const nameA = (a.supplierName || '').toLowerCase();
-                const nameB = (b.supplierName || '').toLowerCase();
-                if (sortSupplier === 'asc') {
-                    return nameA.localeCompare(nameB, 'vi');
-                } else {
-                    return nameB.localeCompare(nameA, 'vi');
-                }
-            });
-        }
-
-        // Sort by date
-        if (sortDate !== 'none') {
-            sorted.sort((a, b) => {
-                const dateA = new Date(a.exportsDate).getTime();
-                const dateB = new Date(b.exportsDate).getTime();
-                return sortDate === 'asc' ? dateA - dateB : dateB - dateA;
-            });
-        }
-
-        // Sort by value
-        if (sortValue !== 'none') {
-            sorted.sort((a, b) => {
-                return sortValue === 'asc'
-                    ? a.totalValue - b.totalValue
-                    : b.totalValue - a.totalValue;
-            });
-        }
-
-        return sorted;
-    };
+    }, [filterStatus, filterCode, filterFromDate, filterToDate, filterType, filterSupplier, applySorting]);
 
     const handleSortSupplier = () => {
         const newSort = sortSupplier === 'none' ? 'asc' : sortSupplier === 'asc' ? 'desc' : 'none';
@@ -242,17 +221,29 @@ export default function ExportReportPage() {
         setSortDate('none');
     };
 
+    // Memoize sorted data - MUST be declared before usePagination
+    const sortedData = useMemo(() => {
+        return applySorting(filteredData);
+    }, [filteredData, applySorting]);
+
+    // Use pagination hook with sorted data
+    const {
+        currentData,
+        currentPage,
+        totalPages,
+        paginationInfo,
+        goToPage,
+        resetPage,
+    } = usePagination(sortedData, 10);
+
     useEffect(() => {
         loadData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [loadData]);
 
-    // Re-apply sorting when sort options change
+    // Reset page when filteredData changes
     useEffect(() => {
-        const sorted = applySorting(filteredData);
-        setFilteredData(sorted);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortSupplier, sortDate, sortValue]);
+        resetPage();
+    }, [filteredData, resetPage]);
 
     const handleSearch = () => {
         loadData();
@@ -270,8 +261,8 @@ export default function ExportReportPage() {
         setSortValue('none');
     };
 
-    const buildExportRows = () =>
-        filteredData.map((item, index) => ({
+    const buildExportRows = useCallback(() =>
+        sortedData.map((item, index) => ({
             STT: index + 1,
             'Mã phiếu': item.code,
             'Loại phiếu':
@@ -289,7 +280,7 @@ export default function ExportReportPage() {
                     : item.status === 'PENDING'
                         ? 'Chờ xử lý'
                         : 'Đã hủy',
-        }));
+        })), [sortedData]);
 
     const handleExportExcel = async () => {
         try {
@@ -355,11 +346,17 @@ export default function ExportReportPage() {
         }
     };
 
-    // Calculate statistics
-    const totalExports = filteredData.length;
-    const totalValue = filteredData.reduce((sum, item) => sum + item.totalValue, 0);
-    const exportedCount = filteredData.filter(item => item.status === 'EXPORTED').length;
-    const pendingCount = filteredData.filter(item => item.status === 'PENDING').length;
+    // Memoize statistics calculations
+    const statistics = useMemo(() => {
+        return {
+            totalExports: sortedData.length,
+            totalValue: sortedData.reduce((sum, item) => sum + item.totalValue, 0),
+            exportedCount: sortedData.filter(item => item.status === 'EXPORTED').length,
+            pendingCount: sortedData.filter(item => item.status === 'PENDING').length,
+        };
+    }, [sortedData]);
+
+    const { totalExports, totalValue, exportedCount, pendingCount } = statistics;
 
     // Pagination is now handled by usePagination hook
 
@@ -709,7 +706,7 @@ export default function ExportReportPage() {
                     <Pagination
                         currentPage={currentPage}
                         totalPages={totalPages}
-                        totalItems={filteredData.length}
+                        totalItems={sortedData.length}
                         itemsPerPage={10}
                         onPageChange={goToPage}
                     />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Sidebar from '@/components/layout/Sidebar';
@@ -79,7 +79,8 @@ export default function ExportReceiptsPage() {
         return `${date}  ${time}`;
     };
 
-    const applySort = (
+    // Memoize sort function
+    const applySort = useCallback((
         list: SupplierExport[],
         field: SortField | null,
         direction: SortDirection,
@@ -99,14 +100,15 @@ export default function ExportReceiptsPage() {
         });
 
         return sorted;
-    };
+    }, []);
 
-    const applySupplierFilter = (list: SupplierExport[]) => {
+    // Memoize supplier filter
+    const applySupplierFilter = useCallback((list: SupplierExport[]) => {
         if (supplierFilter === 'ALL') return list;
         return list.filter((e) => e.supplierId === supplierFilter);
-    };
+    }, [supplierFilter]);
 
-    const fetchSuppliers = async () => {
+    const fetchSuppliers = useCallback(async () => {
         try {
             setLoadingSuppliers(true);
             const list = await getSuppliers();
@@ -120,9 +122,9 @@ export default function ExportReceiptsPage() {
         } finally {
             setLoadingSuppliers(false);
         }
-    };
+    }, []);
 
-    const fetchExports = async () => {
+    const fetchExports = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -135,8 +137,7 @@ export default function ExportReceiptsPage() {
             });
 
             const afterSupplierFilter = applySupplierFilter(exports);
-            const afterSort = applySort(afterSupplierFilter, sortField, sortDirection);
-            setData(afterSort);
+            setData(afterSupplierFilter);
             setCurrentPage(1);
         } catch (e) {
             const msg =
@@ -147,14 +148,27 @@ export default function ExportReceiptsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [statusFilter, codeFilter, fromDate, toDate, supplierFilter]);
 
-    // Pagination calculations
-    const totalItems = data.length;
+    useEffect(() => {
+        // Batch load suppliers and exports
+        Promise.all([fetchSuppliers(), fetchExports()]).catch((err) => {
+            console.error('Lỗi khi tải dữ liệu:', err);
+            // Các hàm fetchSuppliers và fetchExports đã tự xử lý error state
+        });
+    }, [fetchSuppliers, fetchExports]);
+
+    // Memoize sorted data - MUST be declared before using it
+    const sortedData = useMemo(() => {
+        return applySort(data, sortField, sortDirection);
+    }, [data, sortField, sortDirection, applySort]);
+
+    // Pagination calculations with sorted data
+    const totalItems = sortedData.length;
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const currentData = data.slice(startIndex, endIndex);
+    const currentData = sortedData.slice(startIndex, endIndex);
     const displayStart = totalItems === 0 ? 0 : startIndex + 1;
     const displayEnd = Math.min(endIndex, totalItems);
 
@@ -170,34 +184,17 @@ export default function ExportReceiptsPage() {
         }
     };
 
-    useEffect(() => {
-        fetchSuppliers();
-        fetchExports();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const handleSort = (field: SortField) => {
+    const handleSort = useCallback((field: SortField) => {
         const newDirection: SortDirection =
             sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
-
         setSortField(field);
         setSortDirection(newDirection);
-        setData((prev) => applySort(prev, field, newDirection));
-    };
+    }, [sortField, sortDirection]);
 
-    const handleChangeSupplierFilter = (value: string) => {
+    const handleChangeSupplierFilter = useCallback((value: string) => {
         const newFilter = value === 'ALL' ? 'ALL' : Number(value);
         setSupplierFilter(newFilter);
-        setData((prev) =>
-            applySort(
-                newFilter === 'ALL'
-                    ? prev
-                    : prev.filter((e) => e.supplierId === newFilter),
-                sortField,
-                sortDirection,
-            ),
-        );
-    };
+    }, []);
 
     return (
         <div className="min-h-screen">
@@ -451,7 +448,7 @@ export default function ExportReceiptsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.length === 0 && !loading && (
+                                {sortedData.length === 0 && !loading && (
                                     <tr>
                                         <td
                                             colSpan={7}

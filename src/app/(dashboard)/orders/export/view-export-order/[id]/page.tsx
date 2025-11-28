@@ -90,7 +90,11 @@ export default function ViewExportOrder() {
                                 productName = product.name;
                                 unit = 'Cái';
                             } catch (err) {
-                                console.error('Failed to fetch product:', it.productId, err);
+                                // Sản phẩm có thể đã bị xóa, không cần log error
+                                const errorMessage = err instanceof Error ? err.message : String(err);
+                                if (!errorMessage.includes('Không tìm thấy')) {
+                                    console.warn('Failed to fetch product:', it.productId, err);
+                                }
                                 productCode = `ID: ${it.productId}`;
                                 productName = `Sản phẩm #${it.productId}`;
                             }
@@ -187,41 +191,40 @@ export default function ViewExportOrder() {
                         </div>
 
                         {/* BẢNG SẢN PHẨM */}
-                        <div className="border-4 border-gray-400 mb-6 overflow-hidden rounded">
-                            <table className="w-full text-sm">
+                        <div className="border border-gray-200 rounded-lg mb-6 overflow-hidden shadow-sm">
+                            <table className="w-full">
                                 <thead>
-                                    <tr className="bg-[#0046ff] text-white h-10">
-                                        <th className="px-2 w-12">STT</th>
-                                        <th className="px-2 w-40">Tên hàng hóa</th>
-                                        <th className="px-2 w-28">Mã hàng</th>
-                                        <th className="px-2 w-20">ĐVT</th>
-                                        <th className="px-2 w-28">Đơn giá</th>
-                                        <th className="px-2 w-20">SL</th>
-                                        <th className="px-2 w-24">Chiết khấu (%)</th>
-                                        <th className="px-2 w-28">Thành tiền</th>
+                                    <tr className="bg-blue-600 text-white">
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">STT</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-sm">Tên hàng hóa</th>
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">Mã hàng</th>
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">Đơn vị tính</th>
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">Đơn giá</th>
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">Số lượng</th>
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">Chiết khấu (%)</th>
+                                        <th className="px-4 py-3 text-center font-semibold text-sm">Thành tiền</th>
                                     </tr>
                                 </thead>
-
-                                <tbody>
+                                <tbody className="bg-white divide-y divide-gray-200">
                                     {items.length === 0 ? (
-                                        <tr className="border-t h-10">
-                                            <td colSpan={8} className="text-center text-gray-500 py-4">
+                                        <tr>
+                                            <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
                                                 Không có sản phẩm nào
                                             </td>
                                         </tr>
                                     ) : (
                                         items.map((it, i) => (
-                                            <tr key={i} className="border-t h-10">
-                                                <td className="text-center">{i + 1}</td>
-                                                <td className="px-2">{it.productName}</td>
-                                                <td className="text-center">{it.productCode}</td>
-                                                <td className="text-center">{it.unit ?? 'Cái'}</td>
-                                                <td className="text-right">
+                                            <tr key={i} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-4 py-3 text-center text-sm text-gray-700 font-semibold">{i + 1}</td>
+                                                <td className="px-4 py-3 text-left text-sm text-gray-900 font-medium">{it.productName}</td>
+                                                <td className="px-4 py-3 text-center text-sm text-gray-700">{it.productCode}</td>
+                                                <td className="px-4 py-3 text-center text-sm text-gray-700">{it.unit ?? 'Cái'}</td>
+                                                <td className="px-4 py-3 text-right text-sm text-gray-700">
                                                     {Number(it.unitPrice).toLocaleString('vi-VN')}
                                                 </td>
-                                                <td className="text-center">{it.quantity}</td>
-                                                <td className="text-center">{it.discount || it.discountPercent || 0}</td>
-                                                <td className="text-right font-medium">
+                                                <td className="px-4 py-3 text-center text-sm text-gray-700">{it.quantity}</td>
+                                                <td className="px-4 py-3 text-center text-sm text-gray-700">{it.discount || it.discountPercent || 0}</td>
+                                                <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
                                                     {(() => {
                                                         const subtotal = Number(it.unitPrice) * it.quantity;
                                                         const discount = it.discount || it.discountPercent || 0;
@@ -235,14 +238,14 @@ export default function ViewExportOrder() {
                                         ))
                                     )}
 
-                                    <tr className="bg-gray-100 font-bold h-10 border-t">
-                                        <td colSpan={7} className="text-center">
-                                            Tổng
-                                        </td>
-                                        <td className="text-right px-4">
-                                            {data.totalValue.toLocaleString('vi-VN')}
-                                        </td>
-                                    </tr>
+                                    {items.length > 0 && (
+                                        <tr className="bg-blue-50 border-t-2 border-blue-600">
+                                            <td colSpan={7} className="px-4 py-3 text-right font-bold text-sm text-gray-900">Tổng</td>
+                                            <td className="px-4 py-3 text-right font-bold text-sm text-blue-600">
+                                                {data.totalValue.toLocaleString('vi-VN')}
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>

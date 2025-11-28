@@ -754,28 +754,28 @@ export default function InventoryReportPage() {
                             </p>
                         </div>
                         <div className="grid grid-cols-1 gap-3">
-                            <button
-                                onClick={handleExportExcel}
+                    <button
+                        onClick={handleExportExcel}
                                 className="w-full px-5 py-3 rounded-lg bg-green-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-green-700 transition"
-                            >
+                    >
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                     <path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
                                     <path d="M8 11L12 15L16 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                     <path d="M12 4V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
-                                Xuất Excel
-                            </button>
-                            <button
-                                onClick={handleExportPDF}
+                        </svg>
+                        Xuất Excel
+                    </button>
+                    <button
+                        onClick={handleExportPDF}
                                 className="w-full px-5 py-3 rounded-lg bg-red-600 text-white font-medium flex items-center justify-center gap-2 hover:bg-red-700 transition"
-                            >
+                    >
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                                     <path d="M21 15V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
                                     <path d="M8 11L12 15L16 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                     <path d="M12 4V15" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
-                                Xuất PDF
-                            </button>
+                        </svg>
+                        Xuất PDF
+                    </button>
                         </div>
                     </div>
                 </div>
