@@ -1,0 +1,63 @@
+# Unix line endings for shell scripts
+*.sh text eol=lf
+
+# Windows line endings for batch files
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# TypeScript and JavaScript source files should use LF
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+
+# Configuration files should use LF
+*.json text eol=lf
+*.jsonc text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+
+# CSS and styling files
+*.css text eol=lf
+*.scss text eol=lf
+*.sass text eol=lf
+*.less text eol=lf
+
+# HTML and markdown files
+*.html text eol=lf
+*.htm text eol=lf
+*.md text eol=lf
+
+# Other text files
+*.txt text eol=lf
+*.log text eol=lf
+*.config.* text eol=lf
+
+# Default behavior for text files
+* text=auto
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+
+
+
+
+
+
+
+
+
