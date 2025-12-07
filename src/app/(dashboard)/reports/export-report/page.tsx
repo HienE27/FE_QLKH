@@ -5,8 +5,10 @@ import Sidebar from '@/components/layout/Sidebar';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { ensureVnFont } from '@/lib/pdf';
+import { usePagination } from '@/hooks/usePagination';
 import {
     searchExportsPaged,
+    getAllExports,
     type SupplierExport,
     type ExportStatus,
     type PageResponse,
@@ -44,25 +46,12 @@ const defaultFilters = {
     status: 'ALL' as FilterStatus,
 };
 
-const formatCurrency = (value: number) =>
-    value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-
-const formatDateTime = (value?: string) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-};
+import { formatPrice, formatDateTime } from '@/lib/utils';
 
 export default function ExportReportPage() {
     const [pageData, setPageData] = useState<PageResponse<SupplierExport> | null>(null);
     const [filteredData, setFilteredData] = useState<SupplierExport[]>([]);
+    const [allData, setAllData] = useState<SupplierExport[]>([]); // Tất cả dữ liệu để tính thống kê
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -73,7 +62,6 @@ export default function ExportReportPage() {
     const [sortField, setSortField] = useState<SortField>('date');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = PAGE_SIZE;
 
     const applyClientFilters = (
@@ -89,11 +77,40 @@ export default function ExportReportPage() {
         );
     };
 
-    const fetchReportData = async (pageToLoad: number = 1, activeFilters = appliedFilters) => {
+    // Load tất cả dữ liệu để tính thống kê (chỉ gọi khi filters thay đổi)
+    const loadAllData = async (activeFilters = appliedFilters) => {
+        try {
+            const allExports = await getAllExports({
+                status:
+                    activeFilters.status === 'ALL'
+                        ? 'ALL'
+                        : activeFilters.status,
+                code: activeFilters.code || undefined,
+                from: activeFilters.from || undefined,
+                to: activeFilters.to || undefined,
+            });
+
+            // Áp dụng filter customer (client-side)
+            const filteredAll = applyClientFilters(allExports, activeFilters.customer);
+            setAllData(filteredAll);
+            return filteredAll;
+        } catch (err) {
+            console.error('Failed to load all export data', err);
+            throw err;
+        }
+    };
+
+    const fetchReportData = async (pageToLoad: number = 1, activeFilters = appliedFilters, skipAllData = false) => {
         try {
             setLoading(true);
             setError(null);
 
+            // Chỉ load allData nếu filters thay đổi hoặc chưa có data
+            if (!skipAllData && (!allData.length || JSON.stringify(activeFilters) !== JSON.stringify(appliedFilters))) {
+                await loadAllData(activeFilters);
+            }
+
+            // Load dữ liệu phân trang để hiển thị bảng
             const response = await searchExportsPaged({
                 status:
                     activeFilters.status === 'ALL'
@@ -109,8 +126,8 @@ export default function ExportReportPage() {
             });
 
             setPageData(response);
-            setFilteredData(response.content);
-            setCurrentPage(pageToLoad);
+            setFilteredData(applyClientFilters(response.content, activeFilters.customer));
+            // Note: currentPage được quản lý bởi usePagination hook
         } catch (err) {
             console.error('Failed to load export report', err);
             setError(
@@ -155,41 +172,54 @@ export default function ExportReportPage() {
         );
     };
 
+    useEffect(() => {
+        // Reload khi sort thay đổi (trừ lần đầu mount)
+        if (pageData) {
+            fetchReportData(currentPage, appliedFilters);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sortField, sortDirection]);
+
+    // Tính thống kê dựa trên TẤT CẢ dữ liệu, không chỉ trang hiện tại
     const totalValue = useMemo(
-        () => filteredData.reduce((sum, record) => sum + (record.totalValue || 0), 0),
-        [filteredData],
+        () => allData.reduce((sum, record) => sum + (record.totalValue || 0), 0),
+        [allData],
     );
 
     const exportedCount = useMemo(
-        () => filteredData.filter((record) => record.status === 'EXPORTED').length,
-        [filteredData],
+        () => allData.filter((record) => record.status === 'EXPORTED').length,
+        [allData],
     );
 
     const pendingCount = useMemo(
-        () => filteredData.filter((record) => record.status === 'PENDING').length,
-        [filteredData],
+        () => allData.filter((record) => record.status === 'PENDING').length,
+        [allData],
     );
 
     const cancelledCount = useMemo(
-        () => filteredData.filter((record) => record.status === 'CANCELLED').length,
-        [filteredData],
+        () => allData.filter((record) => record.status === 'CANCELLED').length,
+        [allData],
     );
 
-    const averageValue = filteredData.length
-        ? Math.round(totalValue / filteredData.length)
+    const averageValue = allData.length
+        ? Math.round(totalValue / allData.length)
         : 0;
 
     const totalItems = pageData?.totalElements ?? filteredData.length;
     const totalPages = pageData?.totalPages ?? 1;
-    const startIndex = (currentPage - 1) * itemsPerPage;
     const currentData = filteredData;
 
-    const handlePageChange = (page: number) => {
-        fetchReportData(page);
-    };
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, paginationInfo } = usePagination({
+        itemsPerPage,
+        totalItems,
+        totalPages,
+        onPageChange: (page) => fetchReportData(page, appliedFilters, true),
+    });
+    const startIndex = paginationInfo.startIndex;
 
     const buildRows = () =>
-        filteredData.map((record, index) => ({
+        allData.map((record, index) => ({
             STT: index + 1,
             'Mã phiếu': record.code,
             'Khách hàng': record.customerName || '-',
@@ -199,7 +229,7 @@ export default function ExportReportPage() {
         }));
 
     const handleExportExcel = async () => {
-        if (!filteredData.length) {
+        if (!allData.length) {
             alert('Không có dữ liệu để xuất.');
             return;
         }
@@ -209,7 +239,7 @@ export default function ExportReportPage() {
             const sheet = XLSX.utils.json_to_sheet(
                 rows.map((row) => ({
                     ...row,
-                    'Giá trị': formatCurrency(row['Giá trị']),
+                    'Giá trị': formatPrice(row['Giá trị']),
                 })),
             );
             const workbook = XLSX.utils.book_new();
@@ -223,7 +253,7 @@ export default function ExportReportPage() {
     };
 
     const handleExportPDF = async () => {
-        if (!filteredData.length) {
+        if (!allData.length) {
             alert('Không có dữ liệu để xuất.');
             return;
         }
@@ -236,8 +266,8 @@ export default function ExportReportPage() {
             doc.text('Báo cáo phiếu xuất kho', 14, 18);
             doc.setFontSize(11);
             doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
-            doc.text(`Tổng phiếu: ${filteredData.length}`, 14, 32);
-            doc.text(`Tổng giá trị: ${formatCurrency(totalValue)} đ`, 80, 32);
+            doc.text(`Tổng phiếu: ${allData.length}`, 14, 32);
+            doc.text(`Tổng giá trị: ${formatPrice(totalValue)} đ`, 80, 32);
 
             autoTable(doc, {
                 head: [['STT', 'Mã phiếu', 'Khách hàng', 'Ngày xuất', 'Trạng thái', 'Giá trị']],
@@ -247,7 +277,7 @@ export default function ExportReportPage() {
                     row['Khách hàng'],
                     row['Ngày xuất'],
                     row['Trạng thái'],
-                    formatCurrency(row['Giá trị']),
+                    formatPrice(row['Giá trị']),
                 ]),
                 startY: 38,
                 styles: { font: 'Roboto', fontSize: 9 },
@@ -329,7 +359,7 @@ export default function ExportReportPage() {
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-blue-gray-800 mb-2">
                                         Trạng thái
@@ -374,12 +404,12 @@ export default function ExportReportPage() {
                             </div>
                         </section>
 
-                        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Tổng phiếu xuất</p>
-                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1">{filteredData.length}</p>
+                        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 max-w-full">
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Tổng phiếu xuất</p>
+                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1 break-words">{allData.length}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -388,11 +418,11 @@ export default function ExportReportPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Tổng giá trị</p>
-                                        <p className="text-2xl font-bold text-[#0099FF] mt-1">{formatCurrency(totalValue)}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Tổng giá trị</p>
+                                        <p className="text-xl font-bold text-[#0099FF] mt-1 break-words leading-tight">{formatPrice(totalValue)}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -401,11 +431,11 @@ export default function ExportReportPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Đã xuất kho</p>
-                                        <p className="text-2xl font-bold text-green-600 mt-1">{exportedCount}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Đã xuất kho</p>
+                                        <p className="text-2xl font-bold text-green-600 mt-1 break-words">{exportedCount}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -414,11 +444,11 @@ export default function ExportReportPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Đang chờ xử lý</p>
-                                        <p className="text-2xl font-bold text-yellow-600 mt-1">{pendingCount}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Đang chờ xử lý</p>
+                                        <p className="text-2xl font-bold text-yellow-600 mt-1 break-words">{pendingCount}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-yellow-50 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -429,11 +459,11 @@ export default function ExportReportPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Giá trị trung bình</p>
-                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1">{formatCurrency(averageValue)}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Giá trị trung bình</p>
+                                        <p className="text-xl font-bold text-blue-gray-800 mt-1 break-words leading-tight">{formatPrice(averageValue)}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -513,7 +543,7 @@ export default function ExportReportPage() {
                                             currentData.map((record, idx) => (
                                                 <tr
                                                     key={record.id}
-                                                    className="border-b border-gray-200 hover:bg-gray-50 transition-colors h-[48px]"
+                                                    className="border-b border-blue-gray-200 hover:bg-blue-gray-50 transition-colors h-[48px]"
                                                 >
                                                     <td className="px-3 text-center text-sm text-blue-gray-800">
                                                         {startIndex + idx + 1}
@@ -528,7 +558,7 @@ export default function ExportReportPage() {
                                                         {formatDateTime(record.exportsDate)}
                                                     </td>
                                                     <td className="px-3 text-right text-sm font-semibold text-green-600">
-                                                        {formatCurrency(record.totalValue || 0)}
+                                                        {formatPrice(record.totalValue || 0)}
                                                     </td>
                                                     <td className="px-3 text-center">
                                                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor[record.status]}`}>

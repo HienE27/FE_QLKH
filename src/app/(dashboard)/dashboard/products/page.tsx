@@ -19,6 +19,8 @@ import { formatPrice, buildImageUrl } from '@/lib/utils';
 import { PAGE_SIZE } from '@/constants/pagination';
 import Pagination from '@/components/common/Pagination';
 import { getAllStock, type StockByStore } from '@/services/stock.service';
+import { usePagination } from '@/hooks/usePagination';
+import { useFilterReset } from '@/hooks/useFilterReset';
 
 type SortKey = 'name' | 'code' | 'unitPrice';
 type SortDirection = 'asc' | 'desc';
@@ -40,7 +42,6 @@ export default function ProductsPage() {
   const [toDate, setToDate] = useState('');
 
   // pagination state (backend)
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const pageSize = PAGE_SIZE;
@@ -50,7 +51,7 @@ export default function ProductsPage() {
   // ===========================
   // LOAD DATA (products + suppliers + stocks)
   // ===========================
-  const loadData = async () => {
+  const loadData = async (page: number = 1) => {
       try {
         setLoading(true);
         setError(null);
@@ -62,7 +63,7 @@ export default function ProductsPage() {
           name: searchName || undefined,
           fromDate: fromDate || undefined,
           toDate: toDate || undefined,
-          page: currentPage - 1, // Backend dùng 0-based
+          page: page - 1, // Backend dùng 0-based
           size: pageSize,
         }),
           getSuppliers(),
@@ -104,15 +105,15 @@ export default function ProductsPage() {
   };
 
   useEffect(() => {
-    loadData();
+    loadData(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, searchCode, searchName, fromDate, toDate]);
+  }, [searchCode, searchName, fromDate, toDate]);
 
   // ===========================
   // HANDLERS
   // ===========================
   const handleSearchClick = () => {
-    setCurrentPage(1);
+    loadData(1);
   };
 
   const handleResetFilter = async () => {
@@ -120,9 +121,8 @@ export default function ProductsPage() {
     setSearchName('');
     setFromDate('');
     setToDate('');
-    setCurrentPage(1);
+    resetPage(); // Reset về trang 1 thông qua hook
     // Gọi loadData ngay sau khi reset với page = 1, giống logic ở các trang báo cáo
-    // Tạm thời set currentPage = 1 trong scope này để loadData sử dụng
     try {
       setLoading(true);
       setError(null);
@@ -162,9 +162,13 @@ export default function ProductsPage() {
     }
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
+  // Sử dụng hook usePagination với scroll preservation
+  const { currentPage, handlePageChange, resetPage } = usePagination({
+    itemsPerPage: pageSize,
+    totalItems,
+    totalPages,
+    onPageChange: loadData,
+  });
 
 
   // ===========================
@@ -205,8 +209,6 @@ export default function ProductsPage() {
 
         {/* Content Container */}
         <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-          {/* Filter Section */}
-          <div className="p-6">
             <FilterSection
               error={error}
               onClearFilter={handleResetFilter}
@@ -225,7 +227,7 @@ export default function ProductsPage() {
                   <input
                     id="productCode"
                     type="text"
-                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-blue-gray-800 placeholder:text-blue-gray-400"
+                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                     placeholder="Nhập mã hàng hóa"
                     value={searchCode}
                     onChange={(e) => setSearchCode(e.target.value)}
@@ -248,7 +250,7 @@ export default function ProductsPage() {
                   <input
                     id="productName"
                     type="text"
-                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-blue-gray-800 placeholder:text-blue-gray-400"
+                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                     placeholder="Nhập tên hàng hóa"
                     value={searchName}
                     onChange={(e) => setSearchName(e.target.value)}
@@ -275,7 +277,7 @@ export default function ProductsPage() {
                     type="date"
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
-                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-blue-gray-800"
+                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800"
                   />
                 </div>
 
@@ -291,7 +293,7 @@ export default function ProductsPage() {
                     type="date"
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
-                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-blue-gray-800"
+                    className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800"
                   />
                 </div>
               </div>
@@ -321,7 +323,6 @@ export default function ProductsPage() {
                 </button>
               </div>
             </FilterSection>
-          </div>
 
           {/* Table */}
           <div className="px-6 pb-6">
@@ -335,7 +336,7 @@ export default function ProductsPage() {
                 { key: 'supplier', label: 'Nguồn hàng', align: 'center' },
                 { key: 'unit', label: 'Đơn vị tính', align: 'center' },
                 { key: 'stock', label: 'Tồn kho', align: 'center' },
-                { key: 'stores', label: 'Kho hàng', align: 'center' },
+                { key: 'stores', label: 'Kho hàng', align: 'left' },
                 { key: 'price', label: 'Đơn giá', align: 'center' },
                 { key: 'actions', label: 'Thao tác', align: 'center' },
               ]}
@@ -386,28 +387,24 @@ export default function ProductsPage() {
                     <td className="px-4 text-center text-sm font-semibold text-blue-gray-800">
                       {stockMap.get(product.id) ?? 0}
                     </td>
-                    <td className="px-4 text-center text-sm">
+                    <td className="px-4 text-left text-sm">
                       {(() => {
                         const stocks = stockDetailsMap.get(product.id) || [];
                         if (stocks.length === 0) {
                           return <span className="text-blue-gray-400">-</span>;
                         }
                         return (
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             {stocks.map((stock) => (
-                              <div key={stock.storeId} className="text-xs">
+                              <div key={stock.storeId} className="flex items-center justify-between gap-2">
                                 <button
                                   onClick={() => router.push(`/categories/stores/view/${stock.storeId}`)}
-                                  className="font-medium text-teal-300 hover:text-teal-400 hover:underline"
+                                  className="text-left font-medium text-[#0099FF] hover:text-[#0088EE] hover:underline transition-colors truncate flex-1"
+                                  title={stock.storeName || `Kho #${stock.storeId}`}
                                 >
                                   {stock.storeName || `Kho #${stock.storeId}`}
                                 </button>
-                                {stock.storeCode && (
-                                  <span className="text-blue-gray-400 ml-1">
-                                    ({stock.storeCode})
-                                  </span>
-                                )}
-                                : <span className="font-semibold text-teal-300">
+                                <span className="font-semibold text-blue-gray-800 whitespace-nowrap">
                                   {stock.quantity}
                                 </span>
                               </div>
@@ -430,7 +427,7 @@ export default function ProductsPage() {
                 );
               }}
             />
-            {!loading && !error && totalItems > 0 && (
+            {!error && totalItems > 0 && (
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}

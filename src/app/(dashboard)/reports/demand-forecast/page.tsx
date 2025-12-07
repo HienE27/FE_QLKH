@@ -7,8 +7,7 @@ import { getAllStock } from '@/services/stock.service';
 import { getAllExports } from '@/services/inventory.service';
 import { getDemandForecast, type DemandForecastResponse, type ForecastItem } from '@/services/ai.service';
 import type { Product } from '@/types/product';
-
-const formatCurrency = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+import { formatPrice } from '@/lib/utils';
 
 export default function DemandForecastPage() {
   const [loading, setLoading] = useState(true);
@@ -28,12 +27,7 @@ export default function DemandForecastPage() {
     loadInitialData();
   }, []);
 
-  useEffect(() => {
-    if (selectedProductId) {
-      loadProductForecast();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProductId]);
+  // Không tự động load forecast khi chọn sản phẩm, chỉ load khi user nhấn nút
 
   const loadInitialData = async () => {
     try {
@@ -55,9 +49,7 @@ export default function DemandForecastPage() {
       });
       setStockMap(stockMapData);
 
-      // Load forecast data tổng thể
-      const forecast = await getDemandForecast();
-      setForecastData(forecast);
+      // Không tự động load forecast, chỉ load khi user nhấn nút
     } catch (err) {
       console.error('Error loading initial data:', err);
     } finally {
@@ -239,9 +231,48 @@ export default function DemandForecastPage() {
             </div>
 
             {/* Forecast Summary */}
-            {forecastData && (
+            {!forecastData ? (
+              <div className="bg-teal-50 dark:bg-teal-900/20 rounded-purity shadow-purity p-6 mb-6 border border-teal-200 dark:border-teal-800 text-center">
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      const forecast = await getDemandForecast();
+                      setForecastData(forecast);
+                    } catch (err) {
+                      console.error('Error loading forecast:', err);
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  className="px-6 py-3 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg font-medium transition-colors disabled:opacity-60"
+                >
+                  {loading ? 'Đang tải...' : '📊 Tải dự báo tổng thể'}
+                </button>
+              </div>
+            ) : (
               <div className="bg-teal-50 dark:bg-teal-900/20 rounded-purity shadow-purity p-6 mb-6 border border-teal-200 dark:border-teal-800">
-                <h2 className="text-lg font-bold text-gray-700 dark:text-white mb-2">Tóm tắt dự báo tổng thể</h2>
+                <div className="flex justify-between items-start mb-2">
+                  <h2 className="text-lg font-bold text-gray-700 dark:text-white">Tóm tắt dự báo tổng thể</h2>
+                  <button
+                    onClick={async () => {
+                      try {
+                        setLoading(true);
+                        const forecast = await getDemandForecast();
+                        setForecastData(forecast);
+                      } catch (err) {
+                        console.error('Error loading forecast:', err);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                    className="px-4 py-2 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                  >
+                    🔄 Làm mới
+                  </button>
+                </div>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">{forecastData.summary}</p>
                 {forecastData.analysis && (
                   <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
@@ -252,11 +283,31 @@ export default function DemandForecastPage() {
             )}
 
             {/* Product Forecast Detail */}
+            {selectedProductId && !productForecast && (
+              <div className="bg-white dark:bg-gray-700 rounded-purity shadow-purity p-6 text-center">
+                <button
+                  onClick={loadProductForecast}
+                  disabled={loading}
+                  className="px-6 py-3 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg font-medium transition-colors disabled:opacity-60"
+                >
+                  {loading ? 'Đang phân tích...' : '📈 Phân tích dự báo cho sản phẩm này'}
+                </button>
+              </div>
+            )}
             {selectedProduct && productForecast && (
               <div className="space-y-6">
                 {/* Product Info Card */}
                 <div className="bg-white dark:bg-gray-700 rounded-purity shadow-purity p-6">
-                  <h2 className="text-xl font-bold text-gray-700 dark:text-white mb-4">Thông tin sản phẩm</h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-700 dark:text-white">Thông tin sản phẩm</h2>
+                    <button
+                      onClick={loadProductForecast}
+                      disabled={loading}
+                      className="px-4 py-2 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                    >
+                      🔄 Làm mới
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-400 dark:text-gray-400">Tên sản phẩm</p>
@@ -278,7 +329,7 @@ export default function DemandForecastPage() {
                     <div>
                       <p className="text-sm text-gray-400 dark:text-gray-400">Giá bán</p>
                       <p className="font-semibold text-lg text-teal-300">
-                        {formatCurrency(selectedProduct.unitPrice || 0)} VNĐ
+                        {formatPrice(selectedProduct.unitPrice || 0)} VNĐ
                       </p>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 // src/app/(dashboard)/categories/suppliers/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import Sidebar from '@/components/layout/Sidebar';
@@ -10,6 +10,8 @@ import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { useFilterReset } from '@/hooks/useFilterReset';
 import {
     searchSuppliers,
     deleteSupplier,
@@ -28,26 +30,25 @@ export default function QuanLyNguonHang() {
     const [searchName, setSearchName] = useState('');
     const [searchType, setSearchType] = useState('');
     const [searchPhone, setSearchPhone] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
 
     // Load data từ BE với pagination
-    const loadData = useCallback(async () => {
+    const loadData = async (page: number = 1) => {
             try {
                 setLoading(true);
                 setError(null);
-            const page = await searchSuppliers({
+            const result = await searchSuppliers({
                 code: searchCode || undefined,
                 name: searchName || undefined,
                 type: searchType || undefined,
                 phone: searchPhone || undefined,
-                page: currentPage - 1, // Backend dùng 0-based
+                page: page - 1, // Backend dùng 0-based
                 size: PAGE_SIZE,
             });
-            setData(page.content);
-            setTotalPages(page.totalPages);
-            setTotalItems(page.totalElements);
+            setData(result.content);
+            setTotalPages(result.totalPages);
+            setTotalItems(result.totalElements);
             } catch (e) {
                 const msg =
                     e instanceof Error
@@ -57,11 +58,12 @@ export default function QuanLyNguonHang() {
             } finally {
                 setLoading(false);
             }
-    }, [searchCode, searchName, searchType, searchPhone, currentPage]);
+    };
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        loadData(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchCode, searchName, searchType, searchPhone]);
 
     // Helper function để chuyển đổi type sang tiếng Việt
     const getTypeLabel = (type: string | null | undefined): string => {
@@ -70,13 +72,59 @@ export default function QuanLyNguonHang() {
         return SUPPLIER_TYPE_LABELS[normalizedType as keyof typeof SUPPLIER_TYPE_LABELS] || type;
     };
 
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, resetPage } = usePagination({
+        itemsPerPage: PAGE_SIZE,
+        totalItems,
+        totalPages,
+        onPageChange: loadData,
+    });
+
+    // Sử dụng hook useFilterReset để tái sử dụng logic reset filter
+    const { handleResetFilter } = useFilterReset({
+        resetFilters: () => {
+            setSearchCode('');
+            setSearchName('');
+            setSearchType('');
+            setSearchPhone('');
+        },
+        loadData: async (pageNum = 1) => {
+            try {
+                setLoading(true);
+                setError(null);
+                const result = await searchSuppliers({
+                    code: undefined,
+                    name: undefined,
+                    type: undefined,
+                    phone: undefined,
+                    page: pageNum - 1,
+                    size: PAGE_SIZE,
+                });
+                setData(result.content);
+                setTotalPages(result.totalPages);
+                setTotalItems(result.totalElements);
+            } catch (e) {
+                const msg =
+                    e instanceof Error
+                        ? e.message
+                        : 'Không tải được danh sách nguồn hàng';
+                setError(msg);
+            } finally {
+                setLoading(false);
+            }
+        },
+        resetPage,
+        setLoading,
+        setError,
+    });
+
     const handleDelete = async (id: number, name: string) => {
         const ok = window.confirm(`Xóa nhà cung cấp "${name}"?`);
         if (!ok) return;
 
         try {
             await deleteSupplier(id);
-            await loadData(); // Reload data sau khi xóa
+            await loadData(currentPage); // Reload data sau khi xóa
         } catch (e) {
             const msg =
                 e instanceof Error ? e.message : 'Xóa nhà cung cấp thất bại';
@@ -84,12 +132,8 @@ export default function QuanLyNguonHang() {
         }
     };
 
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page);
-    };
-
     const handleSearch = () => {
-        setCurrentPage(1); // Reset về trang đầu khi search
+        loadData(1); // Reset về trang đầu khi search
     };
 
     return (
@@ -103,45 +147,13 @@ export default function QuanLyNguonHang() {
 
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-                    {/* Filter Section */}
-                    <div className="p-6">
                         <FilterSection
                             error={error}
-                            onClearFilter={async () => {
-                                setSearchCode('');
-                                setSearchName('');
-                                setSearchType('');
-                                setSearchPhone('');
-                                setCurrentPage(1);
-                                // Gọi API trực tiếp với giá trị reset, không phụ thuộc vào state
-                                try {
-                                    setLoading(true);
-                                    setError(null);
-                                    const page = await searchSuppliers({
-                                        code: undefined,
-                                        name: undefined,
-                                        type: undefined,
-                                        phone: undefined,
-                                        page: 0,
-                                        size: PAGE_SIZE,
-                                    });
-                                    setData(page.content);
-                                    setTotalPages(page.totalPages);
-                                    setTotalItems(page.totalElements);
-                                } catch (e) {
-                                    const msg =
-                                        e instanceof Error
-                                            ? e.message
-                                            : 'Không tải được danh sách nguồn hàng';
-                                    setError(msg);
-                                } finally {
-                                    setLoading(false);
-                                }
-                            }}
+                            onClearFilter={handleResetFilter}
                             onCreateNew={() => router.push('/categories/suppliers/create')}
                             createButtonText="Thêm mới nguồn"
                         >
-                            <div className="grid grid-cols-3 gap-4 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                                 {/* Mã nguồn */}
                                 <div>
                                     <label className="block text-sm font-medium text-blue-gray-800 mb-2">
@@ -156,7 +168,7 @@ export default function QuanLyNguonHang() {
                                                 handleSearch();
                                             }
                                         }}
-                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 text-blue-gray-800 placeholder:text-blue-gray-400"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                                         placeholder="Nhập mã nguồn"
                                     />
                                 </div>
@@ -259,7 +271,6 @@ export default function QuanLyNguonHang() {
                                 </button>
                             </div>
                         </FilterSection>
-                    </div>
 
                     {/* Table */}
                     <div className="px-6 pb-6">
@@ -318,7 +329,7 @@ export default function QuanLyNguonHang() {
                             }}
                         />
 
-                        {!loading && totalItems > 0 && (
+                        {totalItems > 0 && (
                             <div className="mt-4">
                                 <Pagination
                                     currentPage={currentPage}

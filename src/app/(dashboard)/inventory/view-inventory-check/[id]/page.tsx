@@ -20,10 +20,7 @@ import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
 
 import { getProduct } from '@/services/product.service';
 
-const formatCurrency = (value: number) =>
-    value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-
-import { formatDateTime } from '@/lib/utils';
+import { formatPrice, formatDateTime, formatDateTimeWithSeconds } from '@/lib/utils';
 
 export default function ViewInventoryCheckPage() {
     const params = useParams();
@@ -170,7 +167,7 @@ export default function ViewInventoryCheckPage() {
                                 </div>
 
                                 <div className="space-y-4">
-                                    <InfoRow label="Ngày kiểm kê" value={formatDateTime(data.checkDate)} />
+                                    <InfoRow label="Ngày kiểm kê" value={formatDateTimeWithSeconds(data.checkDate)} />
                                     <InfoRow label="Mô tả" value={data.description} multi />
                                     <InfoRow label="Ghi chú" value={data.note} multi />
                                 </div>
@@ -210,19 +207,19 @@ export default function ViewInventoryCheckPage() {
                                                 <td className="text-center text-blue-gray-800">{it.productCode}</td>
                                                 <td className="text-center text-blue-gray-800">{it.unit ?? 'Cái'}</td>
                                                 <td className="text-right px-2 text-blue-gray-800">
-                                                    {formatCurrency(it.systemQuantity)}
+                                                    {formatPrice(it.systemQuantity)}
                                                 </td>
                                                 <td className="text-right px-2 text-blue-gray-800">
-                                                    {formatCurrency(it.actualQuantity)}
+                                                    {formatPrice(it.actualQuantity)}
                                                 </td>
                                                 <td className={`text-right px-2 font-medium ${it.differenceQuantity > 0 ? 'text-green-500' : it.differenceQuantity < 0 ? 'text-red-500' : 'text-blue-gray-400'}`}>
-                                                    {formatCurrency(it.differenceQuantity)}
+                                                    {formatPrice(it.differenceQuantity)}
                                                 </td>
                                                 <td className="text-right px-2 text-blue-gray-800">
-                                                    {formatCurrency(it.unitPrice)}
+                                                    {formatPrice(it.unitPrice)}
                                                 </td>
                                                 <td className={`text-right px-2 font-medium ${it.totalValue > 0 ? 'text-green-500' : it.totalValue < 0 ? 'text-red-500' : 'text-blue-gray-400'}`}>
-                                                    {formatCurrency(it.totalValue)}
+                                                    {formatPrice(it.totalValue)}
                                                 </td>
                                                 <td className="text-center px-2 text-xs text-blue-gray-400">
                                                     {it.note || '-'}
@@ -236,7 +233,7 @@ export default function ViewInventoryCheckPage() {
                                             Tổng giá trị chênh lệch
                                         </td>
                                         <td className={`text-right px-4 text-blue-gray-800 ${data.totalDifferenceValue > 0 ? 'text-green-500' : data.totalDifferenceValue < 0 ? 'text-red-500' : ''}`}>
-                                            {formatCurrency(data.totalDifferenceValue)}
+                                            {formatPrice(data.totalDifferenceValue)}
                                         </td>
                                         <td></td>
                                     </tr>
@@ -395,23 +392,7 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
         (auditData as Record<string, string | undefined>).confirmedTime ??
         '';
 
-    const formatDateTime = (v?: string) => {
-        if (!v || v.trim() === '') return '';
-        try {
-            const d = new Date(v);
-            if (Number.isNaN(d.getTime())) return v;
-            // Format: HH:mm:ss DD/MM/YYYY
-            const hours = String(d.getHours()).padStart(2, '0');
-            const minutes = String(d.getMinutes()).padStart(2, '0');
-            const seconds = String(d.getSeconds()).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
-        } catch (e) {
-            return v;
-        }
-    };
+    // Sử dụng formatDateTimeWithSeconds từ utils.ts
 
     // Kiểm tra quyền
     const canApprove = hasPermission(userRoles, PERMISSIONS.INVENTORY_CHECK_APPROVE);
@@ -555,7 +536,7 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
                             </div>
                             <div>
                                 <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                                <ReadonlyInput value={formatDateTime(createdAt)} label="Chưa có" />
+                                <ReadonlyInput value={formatDateTimeWithSeconds(createdAt)} label="Chưa có" />
                             </div>
                         </div>
                     </div>
@@ -604,7 +585,7 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
                             )}
                             <div>
                                 <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                                <ReadonlyInput value={formatDateTime(approvedAt)} label="Chưa có" />
+                                <ReadonlyInput value={formatDateTimeWithSeconds(approvedAt)} label="Chưa có" />
                             </div>
                         </div>
                     </div>
@@ -638,7 +619,7 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
                             </div>
                             <div>
                                 <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                                <ReadonlyInput value={formatDateTime(rejectedAt)} label="Chưa có" />
+                                <ReadonlyInput value={formatDateTimeWithSeconds(rejectedAt)} label="Chưa có" />
                             </div>
                         </div>
                     </div>
@@ -669,7 +650,7 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
                             )}
                             <div>
                                 <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                                <ReadonlyInput value={formatDateTime(confirmedAt)} label="Chưa có" />
+                                <ReadonlyInput value={formatDateTimeWithSeconds(confirmedAt)} label="Chưa có" />
                             </div>
                         </div>
                     </div>

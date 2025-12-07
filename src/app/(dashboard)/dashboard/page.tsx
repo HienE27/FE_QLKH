@@ -11,9 +11,7 @@ import { getDashboardAlerts, DashboardAlert } from '@/services/ai.service';
 import SmartInventoryAlertPopup from '@/components/ai/SmartInventoryAlertPopup';
 import AlertProductsPopup from '@/components/ai/AlertProductsPopup';
 import { getAllStock } from '@/services/stock.service';
-
-const formatCurrency = (value: number) =>
-  value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+import { formatPrice } from '@/lib/utils';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -42,14 +40,14 @@ export default function DashboardPage() {
   // AI Alerts
   const [aiAlerts, setAiAlerts] = useState<DashboardAlert[]>([]);
   const [aiSummary, setAiSummary] = useState<string>('');
-  const [alertsLoading, setAlertsLoading] = useState(true);
+  const [alertsLoading, setAlertsLoading] = useState(false);
   const [showSmartAlertPopup, setShowSmartAlertPopup] = useState(false);
   const [showAlertProductsPopup, setShowAlertProductsPopup] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<DashboardAlert | null>(null);
 
   useEffect(() => {
     loadDashboardData();
-    loadAiAlerts();
+    // Không tự động load AI alerts, chỉ load khi user nhấn nút
   }, []);
 
   const loadAiAlerts = async () => {
@@ -131,7 +129,7 @@ export default function DashboardPage() {
           const dateB = new Date(b.importsDate || 0).getTime();
           return dateB - dateA;
         })
-        .slice(0, 5);
+        .slice(0, 3);
       setRecentImports(sortedImports);
 
       const exportedItems = exports.filter(e => e.status === 'EXPORTED');
@@ -148,7 +146,7 @@ export default function DashboardPage() {
           const dateB = new Date(b.exportsDate || 0).getTime();
           return dateB - dateA;
         })
-        .slice(0, 5);
+        .slice(0, 3);
       setRecentExports(sortedExports);
 
     } catch (err) {
@@ -267,7 +265,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-blue-gray-600 font-bold mb-1">Giá trị tồn kho</p>
-                  <p className="text-2xl font-bold text-blue-gray-800">{formatCurrency(totalInventoryValue)}</p>
+                  <p className="text-2xl font-bold text-blue-gray-800">{formatPrice(totalInventoryValue)}</p>
                 </div>
                 <div className="w-12 h-12 bg-[#0099FF] rounded-xl flex items-center justify-center shadow-md">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-white">
@@ -310,7 +308,6 @@ export default function DashboardPage() {
         </div>
 
         {/* AI Alerts Section */}
-        {(aiAlerts.length > 0 || alertsLoading) && (
           <div className="mb-6">
             <div className="bg-white rounded-xl shadow-sm p-6 border border-blue-gray-100">
               <div className="flex items-center justify-between mb-4">
@@ -334,12 +331,22 @@ export default function DashboardPage() {
                   </button>
                   <button
                     onClick={loadAiAlerts}
-                    className="px-3 py-1.5 bg-transparent text-gray-400 hover:text-gray-700 dark:hover:text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-1"
+                  disabled={alertsLoading}
+                  className="px-3 py-1.5 bg-[#0099FF] text-white text-sm font-bold rounded-lg hover:bg-[#0088EE] transition-colors flex items-center gap-1 shadow-md disabled:opacity-60"
                   >
+                  {alertsLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Đang tải...</span>
+                    </>
+                  ) : (
+                    <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Làm mới
+                      Tải cảnh báo AI
+                    </>
+                  )}
                   </button>
                 </div>
               </div>
@@ -351,7 +358,7 @@ export default function DashboardPage() {
                     Đang phân tích dữ liệu...
                   </p>
                 </div>
-              ) : (
+            ) : aiAlerts.length > 0 ? (
                 <>
                   {aiSummary && (
                     <div className="mb-4 p-3 bg-[#0099FF]/10 border-2 border-[#0099FF] rounded-lg">
@@ -403,10 +410,15 @@ export default function DashboardPage() {
                     })}
                   </div>
                 </>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-blue-gray-600 mb-4">
+                  Nhấn nút "Tải cảnh báo AI" để xem các cảnh báo thông minh
+                </p>
+              </div>
               )}
             </div>
           </div>
-        )}
 
         {/* Import/Export Statistics */}
         <div className="mb-6">
@@ -436,7 +448,7 @@ export default function DashboardPage() {
                     Tổng giá trị
                   </p>
                   <p className="text-lg font-bold text-[#0099FF]">
-                    {formatCurrency(totalImportValue)}
+                    {formatPrice(totalImportValue)}
                   </p>
                 </div>
                 <div className="flex justify-between items-center">
@@ -481,7 +493,7 @@ export default function DashboardPage() {
                     Tổng giá trị
                   </p>
                   <p className="text-lg font-bold text-[#0099FF]">
-                    {formatCurrency(totalExportValue)}
+                    {formatPrice(totalExportValue)}
                   </p>
                 </div>
                 <div className="flex justify-between items-center">
@@ -572,7 +584,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="ml-3 text-right">
                         <p className="text-sm font-bold text-[#0099FF]">
-                          {formatCurrency(item.totalValue)}
+                          {formatPrice(item.totalValue)}
                         </p>
                         <div className="mt-1">{getStatusBadge(item.status)}</div>
                       </div>
@@ -619,7 +631,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="ml-3 text-right">
                         <p className="text-sm font-bold text-[#0099FF]">
-                          {formatCurrency(item.totalValue)}
+                          {formatPrice(item.totalValue)}
                         </p>
                         <div className="mt-1">{getStatusBadge(item.status)}</div>
                       </div>

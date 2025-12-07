@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
+import { usePagination } from '@/hooks/usePagination';
 import { ensureVnFont } from '@/lib/pdf';
 import { getProducts } from '@/services/product.service';
 import { getOrders } from '@/services/order.service';
@@ -12,8 +13,7 @@ import { getAllStock } from '@/services/stock.service';
 import type { Product } from '@/types/product';
 import type { Order } from '@/types/order';
 
-const formatCurrency = (value: number) =>
-    value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+import { formatPrice } from '@/lib/utils';
 
 // Format AI suggestion text with better layout
 const formatAISuggestion = (text: string) => {
@@ -84,7 +84,7 @@ const formatAISuggestion = (text: string) => {
                                     return (
                                         <div key={itemIdx} className="flex items-start gap-3 pl-1">
                                             <span className="text-[#0099FF] mt-2 flex-shrink-0 w-2 h-2 rounded-full bg-[#0099FF]"></span>
-                                            <span className="text-sm leading-relaxed text-gray-700 flex-1">{cleanItem}</span>
+                                            <span className="text-sm leading-relaxed text-blue-gray-700 flex-1">{cleanItem}</span>
                                         </div>
                                     );
                                 })}
@@ -100,13 +100,13 @@ const formatAISuggestion = (text: string) => {
                             // Check if line is a sub-header (starts with capital and ends with colon)
                             if (/^[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ].*:$/.test(line.trim()) && line.length < 80) {
                                 return (
-                                    <h6 key={lineIdx} className="text-sm font-semibold text-gray-800 mt-3 first:mt-0">
+                                    <h6 key={lineIdx} className="text-sm font-semibold text-blue-gray-800 mt-3 first:mt-0">
                                         {line}
                                     </h6>
                                 );
                             }
                             return (
-                                <p key={lineIdx} className="text-sm leading-relaxed text-gray-700">
+                                <p key={lineIdx} className="text-sm leading-relaxed text-blue-gray-700">
                                     {line}
                                 </p>
                             );
@@ -142,8 +142,9 @@ export default function InventoryReportPage() {
     const [sortValue, setSortValue] = useState<'none' | 'asc' | 'desc'>('none');
 
     // Pagination states
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = PAGE_SIZE;
+
+    // handlePageChange đã được cung cấp bởi usePagination hook với scroll preservation
 
     const loadData = async () => {
         try {
@@ -213,7 +214,7 @@ export default function InventoryReportPage() {
             filtered = applySorting(filtered);
 
             setFilteredData(filtered);
-            setCurrentPage(1);
+            resetPage(); // Reset về trang 1 thông qua hook
         } catch (err) {
             console.error('❌ Error loading products:', err);
             setError(err instanceof Error ? err.message : 'Lỗi tải dữ liệu');
@@ -365,15 +366,15 @@ export default function InventoryReportPage() {
             doc.setFontSize(11);
             doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
             doc.text(`Tổng mặt hàng: ${totalProducts}`, 14, 32);
-            doc.text(`Tổng giá trị: ${formatCurrency(totalValue)} đ`, 80, 32);
+            doc.text(`Tổng giá trị: ${formatPrice(totalValue)} đ`, 80, 32);
 
             const rows = buildExportRows().map(row => [
                 row.STT,
                 row['Mã hàng'],
                 row['Tên hàng hóa'],
-                formatCurrency(row['Số lượng']),
-                formatCurrency(row['Đơn giá']),
-                formatCurrency(row['Giá trị tồn']),
+                formatPrice(row['Số lượng']),
+                formatPrice(row['Đơn giá']),
+                formatPrice(row['Giá trị tồn']),
                 row['Tình trạng'],
             ]);
 
@@ -403,11 +404,16 @@ export default function InventoryReportPage() {
         return qty > 0 && qty <= 10;
     }).length;
 
-    // Pagination
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentData = filteredData.slice(startIndex, endIndex);
+    // Pagination - sử dụng hook để tối ưu
+    const {
+        currentData,
+        currentPage,
+        totalPages,
+        paginationInfo,
+        handlePageChange,
+        resetPage,
+    } = usePagination(filteredData, itemsPerPage);
+    const { startIndex } = paginationInfo;
 
 
     const getStockStatusBadge = (quantity: number) => {
@@ -430,8 +436,8 @@ export default function InventoryReportPage() {
                 </div>
 
                 {/* Content Container */}
-                <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-                    <div className="p-6">
+                <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 max-w-full overflow-hidden">
+                    <div className="p-6 max-w-full">
                         {/* Filter Section */}
                         <div className="mb-6">
                             <h3 className="text-lg font-bold mb-4 text-blue-gray-800">Bộ lọc</h3>
@@ -533,12 +539,12 @@ export default function InventoryReportPage() {
                         </div>
 
                         {/* Statistics Cards */}
-                        <div className="grid grid-cols-5 gap-4 mb-6">
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Tổng mặt hàng</p>
-                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1">{totalProducts}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 max-w-full">
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Tổng mặt hàng</p>
+                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1 break-words">{totalProducts}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -549,11 +555,11 @@ export default function InventoryReportPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Tổng số lượng</p>
-                                        <p className="text-2xl font-bold text-[#0099FF] mt-1">{formatCurrency(totalQuantity)}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Tổng số lượng</p>
+                                        <p className="text-2xl font-bold text-[#0099FF] mt-1 break-words">{formatPrice(totalQuantity)}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -563,11 +569,11 @@ export default function InventoryReportPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Tổng giá trị</p>
-                                        <p className="text-2xl font-bold text-[#0099FF] mt-1">{formatCurrency(totalValue)}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Tổng giá trị</p>
+                                        <p className="text-xl font-bold text-[#0099FF] mt-1 break-words leading-tight">{formatPrice(totalValue)}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -577,11 +583,11 @@ export default function InventoryReportPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Sắp hết hàng</p>
-                                        <p className="text-2xl font-bold text-yellow-600 mt-1">{lowStockCount}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Sắp hết hàng</p>
+                                        <p className="text-2xl font-bold text-yellow-600 mt-1 break-words">{lowStockCount}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -591,11 +597,11 @@ export default function InventoryReportPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-blue-gray-600">Hết hàng</p>
-                                        <p className="text-2xl font-bold text-red-500 mt-1">{outOfStockCount}</p>
+                            <div className="bg-white rounded-lg shadow-sm border border-blue-gray-200 p-6 min-w-0 overflow-hidden">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-blue-gray-600 truncate">Hết hàng</p>
+                                        <p className="text-2xl font-bold text-red-500 mt-1 break-words">{outOfStockCount}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -756,11 +762,11 @@ export default function InventoryReportPage() {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-4">
-                                                <h4 className="text-base font-bold text-gray-900">Gợi ý từ AI</h4>
+                                                <h4 className="text-base font-bold text-blue-gray-900">Gợi ý từ AI</h4>
                                                 <button
                                                     type="button"
                                                     onClick={() => setAiSuggestion(null)}
-                                                    className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded hover:bg-gray-100"
+                                                    className="flex-shrink-0 text-blue-gray-400 hover:text-blue-gray-600 transition-colors p-1 rounded hover:bg-blue-gray-100"
                                                     title="Đóng"
                                                 >
                                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -768,7 +774,7 @@ export default function InventoryReportPage() {
                                                     </svg>
                                                 </button>
                                             </div>
-                                            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed max-h-96 overflow-y-auto pr-2">
+                                            <div className="prose prose-sm max-w-none text-blue-gray-700 leading-relaxed max-h-96 overflow-y-auto pr-2">
                                                 {formatAISuggestion(aiSuggestion)}
                                             </div>
                                         </div>
@@ -779,8 +785,8 @@ export default function InventoryReportPage() {
 
                         {/* Table */}
                         <div className="rounded-xl border border-blue-gray-100 overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
+                            <div className="overflow-x-auto max-w-full">
+                                <table className="w-full min-w-[800px]">
                                 <thead>
                                     <tr className="bg-[#0099FF] text-white h-[48px]">
                                         <th className="px-4 text-center font-bold text-sm w-[80px]">STT</th>
@@ -828,7 +834,7 @@ export default function InventoryReportPage() {
                                 <tbody>
                                     {currentData.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="text-center py-8 text-gray-500">
+                                            <td colSpan={7} className="text-center py-8 text-blue-gray-500">
                                                 {loading ? 'Đang tải dữ liệu...' : 'Không có dữ liệu'}
                                             </td>
                                         </tr>
@@ -841,7 +847,7 @@ export default function InventoryReportPage() {
                                             return (
                                                 <tr
                                                     key={record.id}
-                                                    className="border-b border-gray-200 hover:bg-gray-50 transition-colors h-[48px]"
+                                                    className="border-b border-blue-gray-200 hover:bg-blue-gray-50 transition-colors h-[48px]"
                                                 >
                                                     <td className="px-4 text-center text-sm">
                                                         {startIndex + index + 1}
@@ -852,15 +858,15 @@ export default function InventoryReportPage() {
                                                     <td className="px-4 text-left text-sm">
                                                         {record.name}
                                                     </td>
-                                                    <td className={`px-4 text-center text-sm font-medium ${quantity === 0 ? 'text-red-600' : quantity <= 10 ? 'text-yellow-600' : 'text-gray-800'
+                                                    <td className={`px-4 text-center text-sm font-medium ${quantity === 0 ? 'text-red-600' : quantity <= 10 ? 'text-yellow-600' : 'text-blue-gray-800'
                                                         }`}>
-                                                        {formatCurrency(quantity)}
+                                                        {formatPrice(quantity)}
                                                     </td>
                                                     <td className="px-4 text-right text-sm">
-                                                        {formatCurrency(unitPrice)}
+                                                        {formatPrice(unitPrice)}
                                                     </td>
                                                     <td className="px-4 text-right text-sm font-medium text-green-600">
-                                                        {formatCurrency(totalValue)}
+                                                        {formatPrice(totalValue)}
                                                     </td>
                                                     <td className="px-4 text-center">
                                                         {getStockStatusBadge(quantity)}
@@ -881,7 +887,7 @@ export default function InventoryReportPage() {
                                 totalPages={totalPages}
                                 totalItems={filteredData.length}
                                 itemsPerPage={itemsPerPage}
-                                onPageChange={setCurrentPage}
+                                onPageChange={handlePageChange}
                             />
                         </div>
                     </div>

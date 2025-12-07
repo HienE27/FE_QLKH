@@ -15,7 +15,7 @@ import {
 import { getSuppliers, type Supplier } from '@/services/supplier.service';
 import { getProduct } from '@/services/product.service';
 import { getStockByProductAndStore } from '@/services/stock.service';
-import { buildImageUrl } from '@/lib/utils';
+import { buildImageUrl, formatDateTimeWithSeconds } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
 
@@ -611,23 +611,7 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
         (auditData as Record<string, string | undefined>).importedTime ??
         '';
 
-    const formatDateTime = (v?: string) => {
-        if (!v || v.trim() === '') return '';
-        try {
-            const d = new Date(v);
-            if (Number.isNaN(d.getTime())) return v;
-            // Format: HH:mm:ss DD/MM/YYYY
-            const hours = String(d.getHours()).padStart(2, '0');
-            const minutes = String(d.getMinutes()).padStart(2, '0');
-            const seconds = String(d.getSeconds()).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
-        } catch (e) {
-            return v;
-        }
-    };
+    // Sử dụng formatDateTimeWithSeconds từ utils.ts
 
     // Kiểm tra quyền
     const canApprove = hasPermission(userRoles, PERMISSIONS.IMPORT_APPROVE);
@@ -775,7 +759,7 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
                         )}
                         <div>
                             <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                            <ReadonlyInput value={formatDateTime(createdAt)} label="Chưa có" />
+                            <ReadonlyInput value={formatDateTimeWithSeconds(createdAt)} label="Chưa có" />
                         </div>
                     </div>
                 </div>
@@ -824,7 +808,7 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
                         )}
                         <div>
                             <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                            <ReadonlyInput value={formatDateTime(approvedAt)} label="Chưa có" />
+                            <ReadonlyInput value={formatDateTimeWithSeconds(approvedAt)} label="Chưa có" />
                         </div>
                     </div>
                 </div>
@@ -860,7 +844,7 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
                         )}
                         <div>
                             <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                            <ReadonlyInput value={formatDateTime(rejectedAt)} label="Chưa có" />
+                            <ReadonlyInput value={formatDateTimeWithSeconds(rejectedAt)} label="Chưa có" />
                         </div>
                     </div>
                 </div>
@@ -891,7 +875,7 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
                         )}
                         <div>
                             <label className="text-xs text-gray-500 mb-1 block">Thời gian</label>
-                            <ReadonlyInput value={formatDateTime(importedAt)} label="Chưa có" />
+                            <ReadonlyInput value={formatDateTimeWithSeconds(importedAt)} label="Chưa có" />
                         </div>
                     </div>
                 </div>

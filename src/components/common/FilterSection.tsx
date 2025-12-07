@@ -23,7 +23,7 @@ export default function FilterSection({
     return (
         <div className={`bg-white rounded-xl shadow-sm border border-blue-gray-100 p-6 mb-6 ${className}`}>
             {error && (
-                <div className="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                <div className="mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-4 py-2 relative z-10">
                     {error}
                 </div>
             )}

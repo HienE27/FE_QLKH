@@ -18,6 +18,8 @@ import {
 } from '@/services/store.service';
 import { PAGE_SIZE } from '@/constants/pagination';
 import Pagination from '@/components/common/Pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { formatPrice, formatDateTime } from '@/lib/utils';
 
 // Map trạng thái BE → label + màu
 const statusConfig: Record<
@@ -64,7 +66,6 @@ export default function ExportReceiptsPage() {
     const [storeFilter, setStoreFilter] = useState<number | 'ALL'>('ALL');
 
     // pagination state
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = PAGE_SIZE;
 
     // map storeId → name
@@ -74,20 +75,7 @@ export default function ExportReceiptsPage() {
         return map;
     }, [stores]);
 
-    const formatCurrency = (value: number) =>
-        value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-
-    const formatDateTime = (iso: string) => {
-        if (!iso) return '';
-        const d = new Date(iso);
-        if (Number.isNaN(d.getTime())) return iso;
-        const date = d.toLocaleDateString('vi-VN');
-        const time = d.toLocaleTimeString('vi-VN', {
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-        return `${date}  ${time}`;
-    };
+    // Sử dụng formatPrice và formatDateTime từ utils.ts
 
     const applySort = (
         list: SupplierExport[],
@@ -146,7 +134,7 @@ export default function ExportReceiptsPage() {
                 ...result,
                 content: sortedContent,
             });
-            setCurrentPage(page);
+            // Note: currentPage được quản lý bởi usePagination hook
         } catch (e) {
             const msg =
                 e instanceof Error
@@ -161,8 +149,16 @@ export default function ExportReceiptsPage() {
     // Pagination calculations
     const totalItems = pageData?.totalElements ?? 0;
     const totalPages = pageData?.totalPages ?? 0;
-    const startIndex = (currentPage - 1) * itemsPerPage;
     const currentData = pageData?.content ?? [];
+
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, paginationInfo, resetPage } = usePagination({
+        itemsPerPage,
+        totalItems,
+        totalPages,
+        onPageChange: fetchExports,
+    });
+    const startIndex = paginationInfo.startIndex;
 
 
     useEffect(() => {
@@ -193,9 +189,6 @@ export default function ExportReceiptsPage() {
         fetchExports(1);
     };
 
-    const handlePageChange = (page: number) => {
-        fetchExports(page);
-    };
 
     return (
         <div className="min-h-screen bg-blue-gray-50/50">
@@ -208,9 +201,7 @@ export default function ExportReceiptsPage() {
 
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-                    <div className="p-6">
-                        {/* Filter Section */}
-                        <FilterSection
+                    <FilterSection
                             error={error}
                             onClearFilter={async () => {
                                 setCodeFilter('');
@@ -220,7 +211,7 @@ export default function ExportReceiptsPage() {
                                 setStoreFilter('ALL');
                                 setSortField(null);
                                 setSortDirection('asc');
-                                setCurrentPage(1);
+                                resetPage(); // Reset về trang 1 thông qua hook
                                 // Gọi load với giá trị reset trực tiếp, không phụ thuộc vào state
                                 try {
                                     setLoading(true);
@@ -387,7 +378,6 @@ export default function ExportReceiptsPage() {
                                 </button>
                             </div>
                         </FilterSection>
-                    </div>
 
                     {/* Table */}
                     <div className="px-6 pb-6">
@@ -555,7 +545,7 @@ export default function ExportReceiptsPage() {
                                                 })()}
                                             </td>
                                             <td className="px-4 text-center text-sm">
-                                                {formatCurrency(record.totalValue)}
+                                                {formatPrice(record.totalValue)}
                                             </td>
                                             <td className="px-4 text-center text-sm whitespace-nowrap">
                                                 {formatDateTime(record.exportsDate)}

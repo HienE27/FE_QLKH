@@ -8,6 +8,8 @@ import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { useFilterReset } from '@/hooks/useFilterReset';
 import { deleteStore, searchStores } from '@/services/store.service';
 import type { Store } from '@/services/store.service';
 
@@ -18,24 +20,23 @@ export default function StoreManagementPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchCode, setSearchCode] = useState('');
     const [searchName, setSearchName] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
-    const loadStores = useCallback(async () => {
+    const loadStores = async (page: number = 1) => {
         try {
             setError(null);
             setLoading(true);
-            const page = await searchStores({
+            const result = await searchStores({
                 code: searchCode || undefined,
                 name: searchName || undefined,
-                page: currentPage - 1,
+                page: page - 1,
                 size: PAGE_SIZE,
             });
-            setStores(page.content);
-            setTotalPages(page.totalPages);
-            setTotalItems(page.totalElements);
+            setStores(result.content);
+            setTotalPages(result.totalPages);
+            setTotalItems(result.totalElements);
         } catch (err) {
             const message =
                 err instanceof Error ? err.message : 'Không thể tải danh sách kho hàng';
@@ -43,11 +44,52 @@ export default function StoreManagementPage() {
         } finally {
             setLoading(false);
         }
-    }, [searchCode, searchName, currentPage]);
+    };
 
     useEffect(() => {
-        loadStores();
-    }, [loadStores]);
+        loadStores(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchCode, searchName]);
+
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, resetPage } = usePagination({
+        itemsPerPage: PAGE_SIZE,
+        totalItems,
+        totalPages,
+        onPageChange: loadStores,
+    });
+
+    // Sử dụng hook useFilterReset để tái sử dụng logic reset filter
+    const { handleResetFilter } = useFilterReset({
+        resetFilters: () => {
+            setSearchCode('');
+            setSearchName('');
+        },
+        loadData: async (page = 1) => {
+            try {
+                setError(null);
+                setLoading(true);
+                const page = await searchStores({
+                    code: undefined,
+                    name: undefined,
+                    page: page - 1,
+                    size: PAGE_SIZE,
+                });
+                setStores(page.content);
+                setTotalPages(page.totalPages);
+                setTotalItems(page.totalElements);
+            } catch (err) {
+                const message =
+                    err instanceof Error ? err.message : 'Không thể tải danh sách kho hàng';
+                setError(message);
+            } finally {
+                setLoading(false);
+            }
+        },
+        resetPage,
+        setLoading,
+        setError,
+    });
 
     const handleDelete = async (id: number) => {
         const confirmDelete = window.confirm('Bạn có chắc muốn xóa kho hàng này?');
@@ -56,7 +98,7 @@ export default function StoreManagementPage() {
         try {
             setDeletingId(id);
             await deleteStore(id);
-            await loadStores();
+            await loadStores(currentPage);
         } catch (err) {
             const message =
                 err instanceof Error ? err.message : 'Xóa kho hàng thất bại';
@@ -66,12 +108,8 @@ export default function StoreManagementPage() {
         }
     };
 
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page);
-    };
-
     const handleSearch = () => {
-        setCurrentPage(1);
+        loadStores(1);
     };
 
     return (
@@ -86,34 +124,9 @@ export default function StoreManagementPage() {
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     {/* Filter Section */}
-                    <div className="p-6">
                         <FilterSection
                 error={error}
-                onClearFilter={async () => {
-                  setSearchCode('');
-                  setSearchName('');
-                  setCurrentPage(1);
-                  // Gọi API trực tiếp với giá trị reset, không phụ thuộc vào state
-                  try {
-                    setError(null);
-                    setLoading(true);
-                    const page = await searchStores({
-                      code: undefined,
-                      name: undefined,
-                      page: 0,
-                      size: PAGE_SIZE,
-                    });
-                    setStores(page.content);
-                    setTotalPages(page.totalPages);
-                    setTotalItems(page.totalElements);
-                  } catch (err) {
-                    const message =
-                      err instanceof Error ? err.message : 'Không thể tải danh sách kho hàng';
-                    setError(message);
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
+                onClearFilter={handleResetFilter}
                 onCreateNew={() => router.push('/categories/stores/create')}
                 createButtonText="Thêm kho hàng"
             >
@@ -132,7 +145,7 @@ export default function StoreManagementPage() {
                                 handleSearch();
                               }
                             }}
-                            className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 text-blue-gray-800 placeholder:text-blue-gray-400"
+                            className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                         />
                     </div>
                 <div>
@@ -149,7 +162,7 @@ export default function StoreManagementPage() {
                                 handleSearch();
                               }
                             }}
-                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 text-blue-gray-800 placeholder:text-blue-gray-400"
+                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                     />
                     </div>
                 </div>
@@ -178,7 +191,6 @@ export default function StoreManagementPage() {
                   </button>
                 </div>
                         </FilterSection>
-                    </div>
 
                     {/* Table */}
                     <div className="px-6 pb-6">
@@ -220,7 +232,7 @@ export default function StoreManagementPage() {
                 )}
             />
 
-                        {!loading && totalItems > 0 && (
+                        {totalItems > 0 && (
                             <div className="mt-4">
                                 <Pagination
                                     currentPage={currentPage}

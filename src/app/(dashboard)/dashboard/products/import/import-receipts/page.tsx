@@ -22,6 +22,7 @@ import {
 } from '@/services/store.service';
 import { PAGE_SIZE } from '@/constants/pagination';
 import Pagination from '@/components/common/Pagination';
+import { usePagination } from '@/hooks/usePagination';
 
 // dùng luôn ExportStatus làm ImportStatus cho đỡ rối
 type ImportStatus = ExportStatus;
@@ -36,12 +37,7 @@ const statusConfig: Record<ImportStatus, { label: string; color: string }> = {
     RETURNED: { label: 'Hoàn hàng', color: 'bg-purple-500' },
 };
 
-function formatCurrency(value: number | null | undefined) {
-    const n = Number(value ?? 0);
-    return new Intl.NumberFormat('vi-VN').format(n);
-}
-
-import { formatDateTime } from '@/lib/utils';
+import { formatPrice, formatDateTime } from '@/lib/utils';
 
 export default function ImportReceiptsPage() {
     const router = useRouter();
@@ -68,7 +64,6 @@ export default function ImportReceiptsPage() {
     const [storeFilter, setStoreFilter] = useState<number | 'ALL'>('ALL');
 
     // pagination state
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = PAGE_SIZE;
 
     const fetchSuppliers = async () => {
@@ -115,7 +110,6 @@ export default function ImportReceiptsPage() {
                 size: itemsPerPage,
             });
             setPageData(result);
-            setCurrentPage(page);
         } catch (err) {
             // tránh dùng any
             if (err instanceof Error) {
@@ -140,9 +134,13 @@ export default function ImportReceiptsPage() {
         loadImports(1);
     };
 
-    const handlePageChange = (page: number) => {
-        loadImports(page);
-    };
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, resetPage } = usePagination({
+        itemsPerPage,
+        totalItems: pageData?.totalElements ?? 0,
+        totalPages: pageData?.totalPages ?? 0,
+        onPageChange: loadImports,
+    });
 
     const handleChangeStoreFilter = (value: string) => {
         const newFilter = value === 'ALL' ? 'ALL' : Number(value);
@@ -179,8 +177,7 @@ export default function ImportReceiptsPage() {
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     {/* Filter Section */}
-                    <div className="p-6">
-                        <FilterSection
+                    <FilterSection
                             error={error}
                             onClearFilter={async () => {
                                 setCodeFilter('');
@@ -189,7 +186,7 @@ export default function ImportReceiptsPage() {
                                 setToDate('');
                                 setSupplierFilter('ALL');
                                 setStoreFilter('ALL');
-                                setCurrentPage(1);
+                                resetPage(); // Reset về trang 1 thông qua hook
                                 // Gọi load với giá trị reset trực tiếp, không phụ thuộc vào state
                                 try {
                                     setLoading(true);
@@ -392,7 +389,6 @@ export default function ImportReceiptsPage() {
                                 </button>
                             </div>
                         </FilterSection>
-                    </div>
 
                     {/* Table */}
                     <div className="px-6 pb-6">
@@ -476,7 +472,7 @@ export default function ImportReceiptsPage() {
                                             })()}
                                         </td>
                                         <td className="px-4 text-center text-sm">
-                                            {formatCurrency(importRecord.totalValue)}
+                                            {formatPrice(importRecord.totalValue)}
                                         </td>
                                         <td className="px-4 text-center text-sm whitespace-nowrap">
                                             {formatDateTime(importRecord.importsDate)}
@@ -511,7 +507,7 @@ export default function ImportReceiptsPage() {
                             }}
                         />
 
-                        {!loading && (pageData?.content?.length ?? 0) > 0 && (
+                        {(pageData?.content?.length ?? 0) > 0 && (
                             <div className="mt-4">
                                 <Pagination
                                     currentPage={currentPage}

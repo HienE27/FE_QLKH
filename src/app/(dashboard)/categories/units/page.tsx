@@ -8,6 +8,8 @@ import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { useFilterReset } from '@/hooks/useFilterReset';
 import { deleteUnit, searchUnits } from '@/services/unit.service';
 import type { Unit } from '@/types/unit';
 
@@ -17,18 +19,56 @@ export default function UnitManagementPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchName, setSearchName] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const loadUnits = useCallback(async () => {
+  const loadUnits = async (page: number = 1) => {
     try {
       setError(null);
       setLoading(true);
-      const page = await searchUnits({
+      const result = await searchUnits({
         name: searchName || undefined,
-        page: currentPage - 1,
+        page: page - 1,
+        size: PAGE_SIZE,
+      });
+      setUnits(result.content);
+      setTotalPages(result.totalPages);
+      setTotalItems(result.totalElements);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Không thể tải danh sách đơn vị';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUnits(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchName]);
+
+  // Sử dụng hook usePagination với scroll preservation
+  const { currentPage, handlePageChange, resetPage } = usePagination({
+    itemsPerPage: PAGE_SIZE,
+    totalItems,
+    totalPages,
+    onPageChange: loadUnits,
+  });
+
+  // Sử dụng hook useFilterReset để tái sử dụng logic reset filter
+  const { handleResetFilter } = useFilterReset({
+    resetFilters: () => {
+      setSearchName('');
+    },
+    loadData: async (page = 1) => {
+      try {
+        setError(null);
+        setLoading(true);
+        const page = await searchUnits({
+          name: undefined,
+          page: page - 1,
         size: PAGE_SIZE,
       });
       setUnits(page.content);
@@ -41,11 +81,11 @@ export default function UnitManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchName, currentPage]);
-
-  useEffect(() => {
-    loadUnits();
-  }, [loadUnits]);
+    },
+    resetPage,
+    setLoading,
+    setError,
+  });
 
   const handleDelete = async (id: number) => {
     const confirmDelete = window.confirm('Bạn có chắc muốn xóa đơn vị này?');
@@ -54,7 +94,7 @@ export default function UnitManagementPage() {
     try {
       setDeletingId(id);
       await deleteUnit(id);
-      await loadUnits();
+      await loadUnits(currentPage);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Xóa đơn vị thất bại';
@@ -64,12 +104,8 @@ export default function UnitManagementPage() {
     }
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
   const handleSearch = () => {
-    setCurrentPage(1);
+    loadUnits(1);
   };
 
   return (
@@ -83,32 +119,9 @@ export default function UnitManagementPage() {
 
         {/* Content Container */}
         <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-          <div className="p-6">
-      <FilterSection
+          <FilterSection
         error={error}
-        onClearFilter={async () => {
-          setSearchName('');
-          setCurrentPage(1);
-          // Gọi API trực tiếp với giá trị reset, không phụ thuộc vào state
-          try {
-            setError(null);
-            setLoading(true);
-            const page = await searchUnits({
-              name: undefined,
-              page: 0,
-              size: PAGE_SIZE,
-            });
-            setUnits(page.content);
-            setTotalPages(page.totalPages);
-            setTotalItems(page.totalElements);
-          } catch (err) {
-            const message =
-              err instanceof Error ? err.message : 'Không thể tải danh sách đơn vị';
-            setError(message);
-          } finally {
-            setLoading(false);
-          }
-        }}
+        onClearFilter={handleResetFilter}
         onCreateNew={() => router.push('/categories/units/create')}
         createButtonText="Thêm đơn vị"
       >
@@ -126,7 +139,7 @@ export default function UnitManagementPage() {
                 handleSearch();
               }
             }}
-            className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 text-blue-gray-800 placeholder:text-blue-gray-400"
+            className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
           />
         </div>
         <div className="flex justify-end gap-3 mt-4">
@@ -154,7 +167,6 @@ export default function UnitManagementPage() {
           </button>
         </div>
             </FilterSection>
-          </div>
 
           {/* Table */}
           <div className="px-6 pb-6">
@@ -195,7 +207,7 @@ export default function UnitManagementPage() {
                 </>
               )}
             />
-            {!loading && totalItems > 0 && (
+            {totalItems > 0 && (
               <div className="mt-4">
                 <Pagination
                   currentPage={currentPage}

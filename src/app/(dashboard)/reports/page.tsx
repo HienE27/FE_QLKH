@@ -15,8 +15,7 @@ import {
   type StockOptimizationResponse
 } from '@/services/ai.service';
 import ProductDemandForecastReport from '@/components/ai/ProductDemandForecastReport';
-
-const formatCurrency = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+import { formatPrice } from '@/lib/utils';
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<'alerts' | 'forecast' | 'sales' | 'turnover' | 'optimization'>('alerts');
@@ -91,12 +90,7 @@ export default function ReportsPage() {
 
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
-    // Load data when tab changes
-    if (tab === 'alerts' && !inventoryAlerts) loadInventoryAlerts();
-    else if (tab === 'forecast' && !demandForecast) loadDemandForecast();
-    else if (tab === 'sales' && !salesInsights) loadSalesInsights();
-    else if (tab === 'turnover' && !inventoryTurnover) loadInventoryTurnover();
-    else if (tab === 'optimization' && !stockOptimization) loadStockOptimization();
+    // Không tự động load data, chỉ load khi user nhấn nút
   };
 
   return (
@@ -261,7 +255,7 @@ export default function ReportsPage() {
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-bold text-green-500">{formatCurrency(product.revenue)} VNĐ</p>
+                                  <p className="font-bold text-green-500">{formatPrice(product.revenue)} VNĐ</p>
                                   <p className="text-xs text-blue-gray-600">{product.quantitySold} sản phẩm</p>
                                 </div>
                               </div>
@@ -318,7 +312,7 @@ export default function ReportsPage() {
                                     </div>
                                     <div>
                                       <span className="text-blue-gray-600">Giá trị: </span>
-                                      <span className="font-medium text-blue-gray-800">{formatCurrency(item.totalValue)} VNĐ</span>
+                                      <span className="font-medium text-blue-gray-800">{formatPrice(item.totalValue)} VNĐ</span>
                                     </div>
                                   </div>
                                   <p className="text-sm text-red-500 mt-2">💡 {item.recommendation}</p>

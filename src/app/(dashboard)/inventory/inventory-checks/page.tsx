@@ -17,13 +17,9 @@ const statusConfig: Record<InventoryCheckStatus, { label: string; color: string 
     REJECTED: { label: 'Từ chối', color: 'bg-red-500' },
 };
 
-function formatCurrency(value: number | null | undefined) {
-    const n = Number(value ?? 0);
-    return new Intl.NumberFormat('vi-VN').format(n);
-}
-
-import { formatDateTime } from '@/lib/utils';
+import { formatPrice, formatDateTime } from '@/lib/utils';
 import Pagination from '@/components/common/Pagination';
+import { usePagination } from '@/hooks/usePagination';
 
 export default function InventoryChecksPage() {
     const router = useRouter();
@@ -46,7 +42,6 @@ export default function InventoryChecksPage() {
     const [filterToDate, setFilterToDate] = useState('');
 
     // Pagination states
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = PAGE_SIZE;
 
     const loadChecks = async (page: number = 1) => {
@@ -64,7 +59,7 @@ export default function InventoryChecksPage() {
 
             console.log('✅ Loaded checks:', result);
             setPageData(result);
-            setCurrentPage(page);
+            // Note: currentPage được quản lý bởi usePagination hook
         } catch (err) {
             console.error('❌ Error loading checks:', err);
             if (err instanceof Error) {
@@ -129,13 +124,16 @@ export default function InventoryChecksPage() {
     // Pagination calculations (từ BE)
     const totalItems = pageData?.totalElements ?? 0;
     const totalPages = pageData?.totalPages ?? 0;
-    const startIndex = (currentPage - 1) * itemsPerPage;
     const currentData = pageData?.content ?? [];
-    const handlePageChange = (page: number) => {
-        loadChecks(page);
-    };
-    // const displayStart = totalItems === 0 ? 0 : startIndex + 1;
-    // const displayEnd = Math.min(endIndex, totalItems);
+
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, paginationInfo } = usePagination({
+        itemsPerPage,
+        totalItems,
+        totalPages,
+        onPageChange: loadChecks,
+    });
+    const startIndex = paginationInfo.startIndex;
 
 
     return (
@@ -149,42 +147,40 @@ export default function InventoryChecksPage() {
 
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-                    {/* Filter Section */}
-                    <div className="p-6">
-                        <FilterSection
+                    <FilterSection
                             error={error}
                             onClearFilter={handleClearFilters}
                             onCreateNew={canCreate ? () => router.push('/inventory/create-inventory-check') : undefined}
                             createButtonText="Tạo phiếu kiểm kê"
                         >
-                            <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                                 {/* Mã phiếu */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-white mb-2">Mã phiếu</label>
+                                    <label className="block text-sm font-medium text-blue-gray-800 mb-2">Mã phiếu</label>
                                     <input
                                         type="text"
                                         value={filterCode}
                                         onChange={(e) => setFilterCode(e.target.value)}
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700 placeholder:text-gray-400"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                                         placeholder="Nhập mã phiếu"
                                     />
                                 </div>
 
                                 {/* Tình trạng */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-white mb-2">Tình trạng</label>
+                                    <label className="block text-sm font-medium text-blue-gray-800 mb-2">Tình trạng</label>
                                     <div className="relative">
                                         <select
                                             value={filterStatus}
                                             onChange={(e) => setFilterStatus(e.target.value as InventoryCheckStatus | 'ALL')}
-                                            className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700"
+                                            className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800"
                                         >
                                             <option value="ALL" className="bg-white">Tất cả</option>
                                             <option value="PENDING" className="bg-white">Chờ duyệt</option>
                                             <option value="APPROVED" className="bg-white">Đã duyệt</option>
                                             <option value="REJECTED" className="bg-white">Từ chối</option>
                                         </select>
-                                        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-400 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-blue-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </div>
@@ -192,23 +188,23 @@ export default function InventoryChecksPage() {
 
                                 {/* Từ ngày */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-white mb-2">Từ ngày</label>
+                                    <label className="block text-sm font-medium text-blue-gray-800 mb-2">Từ ngày</label>
                                     <input
                                         type="date"
                                         value={filterFromDate}
                                         onChange={(e) => setFilterFromDate(e.target.value)}
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800"
                                     />
                                 </div>
 
                                 {/* Đến ngày */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-white mb-2">Đến ngày</label>
+                                    <label className="block text-sm font-medium text-blue-gray-800 mb-2">Đến ngày</label>
                                     <input
                                         type="date"
                                         value={filterToDate}
                                         onChange={(e) => setFilterToDate(e.target.value)}
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800"
                                     />
                                 </div>
                             </div>
@@ -216,7 +212,7 @@ export default function InventoryChecksPage() {
                             <div className="flex justify-end gap-3">
                                 <button
                                     onClick={handleSearchClick}
-                                    className="px-6 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border border-gray-300"
+                                    className="px-6 py-2 bg-white hover:bg-blue-gray-50 text-blue-gray-800 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border border-blue-gray-300"
                                     disabled={loading}
                                 >
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -227,7 +223,6 @@ export default function InventoryChecksPage() {
                                 </button>
                             </div>
                         </FilterSection>
-                    </div>
 
                     {/* Table */}
                     <div className="px-6 pb-6">
@@ -249,15 +244,15 @@ export default function InventoryChecksPage() {
                                 const check = record as unknown as InventoryCheck;
                                 return (
                                     <>
-                                        <td className="px-4 text-center text-sm text-gray-700 dark:text-white">
+                                        <td className="px-4 text-center text-sm text-blue-gray-800">
                                             {startIndex + index + 1}
                                         </td>
-                                        <td className="px-4 text-center text-sm text-gray-700 dark:text-white">{check.checkCode}</td>
-                                        <td className="px-4 text-center text-sm truncate text-gray-400 dark:text-gray-400" title={check.description || ''}>
+                                        <td className="px-4 text-center text-sm text-blue-gray-800">{check.checkCode}</td>
+                                        <td className="px-4 text-center text-sm truncate text-blue-gray-400" title={check.description || ''}>
                                             {check.description || '-'}
                                         </td>
-                                        <td className={`px-4 text-center text-sm font-medium ${check.totalDifferenceValue > 0 ? 'text-green-400' : check.totalDifferenceValue < 0 ? 'text-red-400' : 'text-gray-400 dark:text-gray-400'}`}>
-                                            {formatCurrency(check.totalDifferenceValue)}
+                                        <td className={`px-4 text-center text-sm font-medium ${check.totalDifferenceValue > 0 ? 'text-green-400' : check.totalDifferenceValue < 0 ? 'text-red-400' : 'text-blue-gray-400'}`}>
+                                            {formatPrice(check.totalDifferenceValue)}
                                         </td>
                                         <td className="px-4 text-center text-sm whitespace-nowrap">
                                             {formatDateTime(check.checkDate)}

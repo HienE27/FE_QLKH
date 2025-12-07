@@ -10,6 +10,7 @@ import { getProduct } from '@/services/product.service';
 import { buildImageUrl, formatPrice } from '@/lib/utils';
 import { PAGE_SIZE } from '@/constants/pagination';
 import Pagination from '@/components/common/Pagination';
+import { usePagination } from '@/hooks/usePagination';
 
 type ProductStockInfo = StockByStore & {
     productCode?: string;
@@ -30,8 +31,19 @@ export default function ViewStorePage() {
     const [error, setError] = useState<string | null>(null);
 
     // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = PAGE_SIZE;
+
+    // Pagination - sử dụng hook để tối ưu
+    const {
+        currentData,
+        currentPage,
+        totalPages,
+        paginationInfo,
+        handlePageChange,
+    } = usePagination(products, itemsPerPage);
+    const totalItems = products.length;
+    const { startIndex, displayStart, displayEnd } = paginationInfo;
+    // handlePageChange đã được cung cấp bởi usePagination hook với scroll preservation
 
     useEffect(() => {
         if (!storeId || Number.isNaN(storeId)) {
@@ -92,14 +104,6 @@ export default function ViewStorePage() {
         })();
     }, [storeId]);
 
-    // Pagination calculations
-    const totalItems = products.length;
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentData = products.slice(startIndex, endIndex);
-    const displayStart = totalItems === 0 ? 0 : startIndex + 1;
-    const displayEnd = Math.min(endIndex, totalItems);
 
     if (loading) {
         return (
@@ -295,7 +299,7 @@ export default function ViewStorePage() {
                                                 totalPages={totalPages}
                                                 totalItems={totalItems}
                                                 itemsPerPage={itemsPerPage}
-                                                onPageChange={setCurrentPage}
+                                                onPageChange={handlePageChange}
                                             />
                                         </div>
                                     )}

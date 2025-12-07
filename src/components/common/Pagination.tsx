@@ -1,3 +1,7 @@
+'use client';
+
+import { useRef, useEffect } from 'react';
+
 interface PaginationProps {
     currentPage: number;
     totalPages: number;
@@ -13,19 +17,53 @@ export default function Pagination({
     itemsPerPage,
     onPageChange,
 }: PaginationProps) {
+    const scrollPositionRef = useRef<number | null>(null);
+    const prevPageRef = useRef(currentPage);
+    const isPageChangingRef = useRef(false);
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const displayStart = totalItems === 0 ? 0 : startIndex + 1;
     const displayEnd = Math.min(startIndex + itemsPerPage, totalItems);
 
+    // Restore scroll position sau khi page thay đổi
+    useEffect(() => {
+        if (isPageChangingRef.current && scrollPositionRef.current !== null) {
+            // Đợi để đảm bảo DOM đã update và data đã load
+            const timer = setTimeout(() => {
+                window.scrollTo({
+                    top: scrollPositionRef.current!,
+                    behavior: 'instant' as ScrollBehavior
+                });
+                scrollPositionRef.current = null;
+                isPageChangingRef.current = false;
+            }, 100);
+            
+            prevPageRef.current = currentPage;
+            
+            return () => clearTimeout(timer);
+        } else {
+            prevPageRef.current = currentPage;
+        }
+    }, [currentPage]);
+
+    const handlePageClick = (newPage: number) => {
+        // Lưu vị trí scroll hiện tại trước khi chuyển trang
+        scrollPositionRef.current = window.scrollY || document.documentElement.scrollTop;
+        isPageChangingRef.current = true;
+        
+        // Gọi callback để chuyển trang
+        onPageChange(newPage);
+    };
+
     const handlePrevious = () => {
         if (currentPage > 1) {
-            onPageChange(currentPage - 1);
+            handlePageClick(currentPage - 1);
         }
     };
 
     const handleNext = () => {
         if (currentPage < totalPages) {
-            onPageChange(currentPage + 1);
+            handlePageClick(currentPage + 1);
         }
     };
 

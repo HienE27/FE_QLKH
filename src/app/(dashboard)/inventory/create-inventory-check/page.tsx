@@ -14,6 +14,7 @@ import { getStores, type Store } from '@/services/store.service';
 import { getStockByStore, type StockByStore } from '@/services/stock.service';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { formatPrice, parseNumber } from '@/lib/utils';
 
 interface CheckItem {
     id: number;
@@ -29,13 +30,7 @@ interface CheckItem {
     note: string;
 }
 
-const formatCurrency = (value: number) =>
-    value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-
-const parseNumber = (value: string): number => {
-    const cleaned = value.replace(/[^\d]/g, '');
-    return cleaned ? Number(cleaned) : 0;
-};
+// Sử dụng formatPrice và parseNumber từ utils.ts
 
 function InfoRow({
     label,
@@ -147,7 +142,7 @@ export default function CreateInventoryCheckPage() {
 
     const calculateTotalDifference = () => {
         const sum = items.reduce((acc, item) => acc + item.totalValue, 0);
-        return formatCurrency(sum);
+        return formatPrice(sum);
     };
 
     const deleteItem = (id: number) => {
@@ -230,10 +225,10 @@ export default function CreateInventoryCheckPage() {
                     productName: prod.name,
                     productCode: prod.code,
                     unit: 'Cái',
-                    systemQuantity: formatCurrency(systemQty),
+                    systemQuantity: formatPrice(systemQty),
                     actualQuantity: '',
                     differenceQuantity: 0,
-                    unitPrice: formatCurrency(prod.unitPrice ?? 0),
+                    unitPrice: formatPrice(prod.unitPrice ?? 0),
                     totalValue: 0,
                     note: '',
                 };
@@ -390,12 +385,12 @@ export default function CreateInventoryCheckPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     <div className="p-6">
                         {error && (
-                            <div className="mb-4 text-sm text-red-500 whitespace-pre-line bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                            <div className="mb-4 text-sm text-red-500 whitespace-pre-line bg-red-50 border border-red-200 rounded-lg px-4 py-2 relative z-10">
                                 {error}
                             </div>
                         )}
                         {success && (
-                            <div className="mb-4 text-sm text-green-500 bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                            <div className="mb-4 text-sm text-green-500 bg-green-50 border border-green-200 rounded-lg px-4 py-2 relative z-10">
                                 {success}
                             </div>
                         )}
@@ -485,7 +480,7 @@ export default function CreateInventoryCheckPage() {
                                 <InfoRow label="Ngày kiểm kê">
                                     <input
                                         type="date"
-                                        className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg bg-blue-gray-50 text-blue-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300"
+                                        className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg bg-blue-gray-50 text-blue-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                         value={checkDate}
                                         onChange={(e) => setCheckDate(e.target.value)}
                                     />
@@ -493,7 +488,7 @@ export default function CreateInventoryCheckPage() {
 
                                 <InfoRow label="Mô tả" multi>
                                     <textarea
-                                        className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg h-14 resize-none bg-blue-gray-50 text-blue-gray-800 placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300"
+                                        className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg h-14 resize-none bg-blue-gray-50 text-blue-gray-800 placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
                                         placeholder="Nhập mô tả..."
@@ -502,7 +497,7 @@ export default function CreateInventoryCheckPage() {
 
                                 <InfoRow label="Ghi chú" multi>
                                     <textarea
-                                        className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg h-14 resize-none bg-blue-gray-50 text-blue-gray-800 placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300"
+                                        className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg h-14 resize-none bg-blue-gray-50 text-blue-gray-800 placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                         value={note}
                                         onChange={(e) => setNote(e.target.value)}
                                         placeholder="Nhập ghi chú..."
@@ -569,7 +564,7 @@ export default function CreateInventoryCheckPage() {
                                             />
                                         </td>
                                         <td className={`px-2 text-right text-sm font-medium border-r border-blue-gray-200 ${item.differenceQuantity > 0 ? 'text-green-500' : item.differenceQuantity < 0 ? 'text-red-500' : 'text-blue-gray-400'}`}>
-                                            {formatCurrency(item.differenceQuantity)}
+                                            {formatPrice(item.differenceQuantity)}
                                         </td>
                                         <td className="px-2 text-right text-sm border-r border-blue-gray-200">
                                             <input
@@ -585,7 +580,7 @@ export default function CreateInventoryCheckPage() {
                                             />
                                         </td>
                                         <td className={`px-2 text-right text-sm font-medium border-r border-blue-gray-200 ${item.totalValue > 0 ? 'text-green-500' : item.totalValue < 0 ? 'text-red-500' : 'text-blue-gray-400'}`}>
-                                            {formatCurrency(item.totalValue)}
+                                            {formatPrice(item.totalValue)}
                                         </td>
                                         <td className="px-2 text-center text-sm border-r border-blue-gray-200">
                                             <input
@@ -682,7 +677,7 @@ export default function CreateInventoryCheckPage() {
                                     value={productKeyword}
                                     onChange={(e) => setProductKeyword(e.target.value)}
                                     placeholder="Tìm theo tên hoặc mã hàng..."
-                                    className="w-full px-3 py-2 border border-blue-gray-300 rounded-lg text-sm bg-white placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300"
+                                    className="w-full px-3 py-2 border border-blue-gray-300 rounded-lg text-sm bg-white placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                 />
                             </div>
 

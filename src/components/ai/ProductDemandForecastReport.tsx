@@ -17,11 +17,7 @@ export default function ProductDemandForecastReport() {
     loadProducts();
   }, []);
 
-  useEffect(() => {
-    if (selectedProductId) {
-      loadForecast();
-    }
-  }, [selectedProductId, forecastDays]);
+  // Không tự động load forecast khi chọn sản phẩm, chỉ load khi user nhấn nút
 
   const loadProducts = async () => {
     try {
@@ -124,6 +120,17 @@ export default function ProductDemandForecastReport() {
       </div>
 
       {/* Forecast Report */}
+      {!forecast && !loading && (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <button
+            onClick={loadForecast}
+            disabled={!selectedProductId || loading}
+            className="px-6 py-3 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {!selectedProductId ? 'Vui lòng chọn sản phẩm' : '📊 Phân tích và tạo báo cáo'}
+          </button>
+        </div>
+      )}
       {loading ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
@@ -138,8 +145,17 @@ export default function ProductDemandForecastReport() {
                 <h2 className="text-2xl font-bold text-gray-800">{forecast.productName}</h2>
                 <p className="text-gray-600">Mã: {forecast.productCode}</p>
               </div>
+              <div className="flex items-center gap-2">
               <div className={`px-4 py-2 rounded-lg ${getStatusBadge(forecast.predictedDaysUntilStockOut).color}`}>
                 <p className="font-semibold">{getStatusBadge(forecast.predictedDaysUntilStockOut).text}</p>
+                </div>
+                <button
+                  onClick={loadForecast}
+                  disabled={loading}
+                  className="px-4 py-2 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+                >
+                  🔄 Làm mới
+                </button>
               </div>
             </div>
 

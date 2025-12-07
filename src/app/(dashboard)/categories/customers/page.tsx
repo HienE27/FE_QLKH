@@ -10,6 +10,8 @@ import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { useFilterReset } from '@/hooks/useFilterReset';
 import {
     searchCustomers,
     deleteCustomer,
@@ -26,20 +28,65 @@ export default function QuanLyKhachHang() {
     const [searchCode, setSearchCode] = useState('');
     const [searchName, setSearchName] = useState('');
     const [searchPhone, setSearchPhone] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
 
     // Load data từ BE với pagination
-    const loadData = useCallback(async () => {
+    const loadData = async (page: number = 1) => {
             try {
                 setLoading(true);
                 setError(null);
-            const page = await searchCustomers({
+            const result = await searchCustomers({
                 code: searchCode || undefined,
                 name: searchName || undefined,
                 phone: searchPhone || undefined,
-                page: currentPage - 1, // Backend dùng 0-based
+                page: page - 1, // Backend dùng 0-based
+                size: PAGE_SIZE,
+            });
+            setData(result.content);
+            setTotalPages(result.totalPages);
+            setTotalItems(result.totalElements);
+            } catch (e) {
+                const msg =
+                    e instanceof Error
+                        ? e.message
+                        : 'Không tải được danh sách khách hàng';
+                setError(msg);
+            } finally {
+                setLoading(false);
+            }
+    };
+
+    useEffect(() => {
+        loadData(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchCode, searchName, searchPhone]);
+
+
+    // Sử dụng hook usePagination với scroll preservation
+    const { currentPage, handlePageChange, resetPage } = usePagination({
+        itemsPerPage: PAGE_SIZE,
+        totalItems,
+        totalPages,
+        onPageChange: loadData,
+    });
+
+    // Sử dụng hook useFilterReset để tái sử dụng logic reset filter
+    const { handleResetFilter } = useFilterReset({
+        resetFilters: () => {
+            setSearchCode('');
+            setSearchName('');
+            setSearchPhone('');
+        },
+        loadData: async (page = 1) => {
+            try {
+                setLoading(true);
+                setError(null);
+                const page = await searchCustomers({
+                    code: undefined,
+                    name: undefined,
+                    phone: undefined,
+                    page: page - 1,
                 size: PAGE_SIZE,
             });
             setData(page.content);
@@ -54,12 +101,11 @@ export default function QuanLyKhachHang() {
             } finally {
                 setLoading(false);
             }
-    }, [searchCode, searchName, searchPhone, currentPage]);
-
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
-
+        },
+        resetPage,
+        setLoading,
+        setError,
+    });
 
     const handleDelete = async (id: number, name: string) => {
         const ok = window.confirm(`Xóa khách hàng "${name}"?`);
@@ -67,7 +113,7 @@ export default function QuanLyKhachHang() {
 
         try {
             await deleteCustomer(id);
-            await loadData(); // Reload data sau khi xóa
+            await loadData(currentPage); // Reload data sau khi xóa
         } catch (e) {
             const msg =
                 e instanceof Error ? e.message : 'Xóa khách hàng thất bại';
@@ -75,12 +121,8 @@ export default function QuanLyKhachHang() {
         }
     };
 
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page);
-    };
-
     const handleSearch = () => {
-        setCurrentPage(1); // Reset về trang đầu khi search
+        loadData(1); // Reset về trang đầu khi search
     };
 
     return (
@@ -94,39 +136,9 @@ export default function QuanLyKhachHang() {
 
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-                    {/* Filter Section */}
-                    <div className="p-6">
                         <FilterSection
                             error={error}
-                            onClearFilter={async () => {
-                                setSearchCode('');
-                                setSearchName('');
-                                setSearchPhone('');
-                                setCurrentPage(1);
-                                // Gọi API trực tiếp với giá trị reset, không phụ thuộc vào state
-                                try {
-                                    setLoading(true);
-                                    setError(null);
-                                    const page = await searchCustomers({
-                                        code: undefined,
-                                        name: undefined,
-                                        phone: undefined,
-                                        page: 0,
-                                        size: PAGE_SIZE,
-                                    });
-                                    setData(page.content);
-                                    setTotalPages(page.totalPages);
-                                    setTotalItems(page.totalElements);
-                                } catch (e) {
-                                    const msg =
-                                        e instanceof Error
-                                            ? e.message
-                                            : 'Không tải được danh sách khách hàng';
-                                    setError(msg);
-                                } finally {
-                                    setLoading(false);
-                                }
-                            }}
+                            onClearFilter={handleResetFilter}
                             onCreateNew={() => router.push('/categories/customers/create')}
                             createButtonText="Thêm mới khách hàng"
                         >
@@ -145,7 +157,7 @@ export default function QuanLyKhachHang() {
                                                 handleSearch();
                                             }
                                         }}
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700 placeholder:text-gray-400"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                                         placeholder="Nhập mã khách hàng"
                                     />
                                 </div>
@@ -164,7 +176,7 @@ export default function QuanLyKhachHang() {
                                                 handleSearch();
                                             }
                                         }}
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700 placeholder:text-gray-400"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                                         placeholder="Nhập tên khách hàng"
                                     />
                                 </div>
@@ -183,7 +195,7 @@ export default function QuanLyKhachHang() {
                                                 handleSearch();
                                             }
                                         }}
-                                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-gray-700 placeholder:text-gray-400"
+                                        className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
                                         placeholder="Nhập số điện thoại"
                                     />
                                 </div>
@@ -215,7 +227,6 @@ export default function QuanLyKhachHang() {
                             </div>
 
                         </FilterSection>
-                    </div>
 
                     {/* Table */}
                     <div className="px-6 pb-6">
@@ -269,7 +280,7 @@ export default function QuanLyKhachHang() {
                             }}
                         />
 
-                        {!loading && totalItems > 0 && (
+                        {totalItems > 0 && (
                             <div className="mt-4">
                                 <Pagination
                                     currentPage={currentPage}

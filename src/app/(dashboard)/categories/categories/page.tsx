@@ -8,6 +8,8 @@ import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
+import { usePagination } from '@/hooks/usePagination';
+import { useFilterReset } from '@/hooks/useFilterReset';
 import { deleteCategory, searchCategories } from '@/services/category.service';
 import type { Category } from '@/types/category';
 
@@ -18,19 +20,60 @@ export default function CategoryManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchCode, setSearchCode] = useState('');
   const [searchName, setSearchName] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const loadCategories = useCallback(async () => {
+  const loadCategories = async (page: number = 1) => {
     try {
       setError(null);
       setLoading(true);
-      const page = await searchCategories({
+      const result = await searchCategories({
         code: searchCode || undefined,
         name: searchName || undefined,
-        page: currentPage - 1,
+        page: page - 1,
+        size: PAGE_SIZE,
+      });
+      setCategories(result.content);
+      setTotalPages(result.totalPages);
+      setTotalItems(result.totalElements);
+      // Note: currentPage được quản lý bởi usePagination hook
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Không thể tải danh mục';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchCode, searchName]);
+
+  // Sử dụng hook usePagination với scroll preservation
+  const { currentPage, handlePageChange, resetPage } = usePagination({
+    itemsPerPage: PAGE_SIZE,
+    totalItems,
+    totalPages,
+    onPageChange: loadCategories,
+  });
+
+  // Sử dụng hook useFilterReset để tái sử dụng logic reset filter
+  const { handleResetFilter } = useFilterReset({
+    resetFilters: () => {
+      setSearchCode('');
+      setSearchName('');
+    },
+    loadData: async (page = 1) => {
+      try {
+        setError(null);
+        setLoading(true);
+        const page = await searchCategories({
+          code: undefined,
+          name: undefined,
+          page: page - 1,
         size: PAGE_SIZE,
       });
       setCategories(page.content);
@@ -43,11 +86,11 @@ export default function CategoryManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchCode, searchName, currentPage]);
-
-  useEffect(() => {
-    loadCategories();
-  }, [loadCategories]);
+    },
+    resetPage,
+    setLoading,
+    setError,
+  });
 
   const handleDelete = async (id: number) => {
     const confirmDelete = window.confirm('Bạn có chắc muốn xóa danh mục này?');
@@ -56,7 +99,7 @@ export default function CategoryManagementPage() {
     try {
       setDeletingId(id);
       await deleteCategory(id);
-      await loadCategories();
+      await loadCategories(currentPage);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Xóa danh mục thất bại';
@@ -66,12 +109,8 @@ export default function CategoryManagementPage() {
     }
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
   const handleSearch = () => {
-    setCurrentPage(1);
+    loadCategories(1);
   };
 
   return (
@@ -85,38 +124,13 @@ export default function CategoryManagementPage() {
 
         {/* Content Container */}
         <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-          <div className="p-6">
       <FilterSection
         error={error}
-        onClearFilter={async () => {
-          setSearchCode('');
-          setSearchName('');
-          setCurrentPage(1);
-          // Gọi API trực tiếp với giá trị reset, không phụ thuộc vào state
-          try {
-            setError(null);
-            setLoading(true);
-            const page = await searchCategories({
-              code: undefined,
-              name: undefined,
-              page: 0,
-              size: PAGE_SIZE,
-            });
-            setCategories(page.content);
-            setTotalPages(page.totalPages);
-            setTotalItems(page.totalElements);
-          } catch (err) {
-            const message =
-              err instanceof Error ? err.message : 'Không thể tải danh mục';
-            setError(message);
-          } finally {
-            setLoading(false);
-          }
-        }}
+            onClearFilter={handleResetFilter}
         onCreateNew={() => router.push('/categories/categories/create')}
         createButtonText="Thêm danh mục"
       >
-        <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-blue-gray-800 mb-2">
               Mã danh mục
@@ -131,7 +145,7 @@ export default function CategoryManagementPage() {
                   handleSearch();
                 }
               }}
-              className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 text-blue-gray-800 placeholder:text-blue-gray-400"
+                  className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
             />
           </div>
         <div>
@@ -148,7 +162,7 @@ export default function CategoryManagementPage() {
                   handleSearch();
                 }
               }}
-            className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 text-blue-gray-800 placeholder:text-blue-gray-400"
+                  className="w-full px-4 py-2 bg-blue-gray-50 border border-blue-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF] text-blue-gray-800 placeholder:text-blue-gray-400"
           />
           </div>
         </div>
@@ -177,7 +191,6 @@ export default function CategoryManagementPage() {
           </button>
         </div>
             </FilterSection>
-          </div>
 
           {/* Table */}
           <div className="px-6 pb-6">
@@ -209,7 +222,7 @@ export default function CategoryManagementPage() {
                 </>
               )}
             />
-            {!loading && totalItems > 0 && (
+            {totalItems > 0 && (
               <div className="mt-4">
                 <Pagination
                   currentPage={currentPage}

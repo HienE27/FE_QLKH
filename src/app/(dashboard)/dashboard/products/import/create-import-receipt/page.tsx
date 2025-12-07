@@ -35,7 +35,7 @@ import type { Product } from '@/types/product';
 
 import { getAllStock } from '@/services/stock.service';
 
-import { buildImageUrl } from '@/lib/utils';
+import { buildImageUrl, formatPrice, parseNumber } from '@/lib/utils';
 import { ocrReceipt } from '@/services/ai.service';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -56,13 +56,7 @@ interface ProductItem {
     supplierIds?: number[] | null; // Danh sách NCC của sản phẩm
 }
 
-const formatCurrency = (value: number) =>
-    value.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-
-const parseNumber = (value: string): number => {
-    const cleaned = value.replace(/[^\d]/g, '');
-    return cleaned ? Number(cleaned) : 0;
-};
+// Sử dụng formatPrice và parseNumber từ utils.ts
 
 function InfoRow({
     label,
@@ -341,7 +335,7 @@ export default function TaoPhieuNhapKho() {
 
         return {
             ...item,
-            total: total > 0 ? formatCurrency(total) : '',
+            total: total > 0 ? formatPrice(total) : '',
         };
     };
 
@@ -409,7 +403,7 @@ export default function TaoPhieuNhapKho() {
             const total = parseNumber(item.total);
             return acc + total;
         }, 0);
-        return formatCurrency(sum);
+        return formatPrice(sum);
     };
 
     const deleteProduct = (id: number) => {
@@ -560,7 +554,7 @@ export default function TaoPhieuNhapKho() {
                     name: prod.name,
                     code: prod.code,
                     unit: 'Cái',
-                    price: formatCurrency(prod.unitPrice ?? 0),
+                    price: formatPrice(prod.unitPrice ?? 0),
                     quantity: '',
                     discount: '',
                     total: '',
@@ -573,7 +567,15 @@ export default function TaoPhieuNhapKho() {
                 newRows.push(row);
             });
 
-            return [...prev, ...newRows];
+            // Tính lại total cho các sản phẩm đã có quantity
+            const updatedRows = newRows.map(row => {
+                if (row.quantity && parseNumber(row.quantity) > 0) {
+                    return recalcRowTotal(row);
+                }
+                return row;
+            });
+
+            return [...prev, ...updatedRows];
         });
 
         closeProductModal();
@@ -824,10 +826,10 @@ export default function TaoPhieuNhapKho() {
                             name: matchedProduct.name,
                             code: matchedProduct.code || '',
                             unit: extractedProduct.unit || matchedProduct.unitName || '',
-                            price: formatCurrency(extractedProduct.unitPrice || 0),
+                            price: formatPrice(extractedProduct.unitPrice || 0),
                             quantity: extractedProduct.quantity.toString(),
                             discount: extractedProduct.discount ? extractedProduct.discount.toString() : '0',
-                            total: formatCurrency(extractedProduct.totalPrice || 0),
+                            total: formatPrice(extractedProduct.totalPrice || 0),
                             availableQuantity: 0,
                             storeId: matchedStoreId, // Đảm bảo storeId được set
                             supplierId: matchedProduct.supplierId,
@@ -843,10 +845,10 @@ export default function TaoPhieuNhapKho() {
                             name: extractedProduct.name,
                             code: extractedProduct.code || '',
                             unit: extractedProduct.unit || '',
-                            price: formatCurrency(extractedProduct.unitPrice || 0),
+                            price: formatPrice(extractedProduct.unitPrice || 0),
                             quantity: extractedProduct.quantity.toString(),
                             discount: extractedProduct.discount ? extractedProduct.discount.toString() : '0',
-                            total: formatCurrency(extractedProduct.totalPrice || 0),
+                            total: formatPrice(extractedProduct.totalPrice || 0),
                             availableQuantity: 0,
                             storeId: matchedStoreId, // Đảm bảo storeId được set
                         };
@@ -962,18 +964,24 @@ export default function TaoPhieuNhapKho() {
                     <p className="text-sm text-blue-gray-600 uppercase">Tạo phiếu nhập kho mới</p>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
-                    <div className="p-6">
+                {/* Thông báo ở ngoài container chính để không bị che */}
+                {(error || success) && (
+                    <div className="mb-4">
                         {error && (
-                            <div className="mb-4 text-sm text-red-500 whitespace-pre-line bg-red-50 border border-red-200 rounded px-4 py-2">
+                            <div className="text-sm text-red-500 whitespace-pre-line bg-red-50 border border-red-200 rounded-lg px-4 py-3 shadow-sm">
                                 {error}
                             </div>
                         )}
                         {success && (
-                            <div className="mb-4 text-sm text-green-500 bg-green-50 border border-green-200 rounded px-4 py-2">
+                            <div className="text-sm text-green-500 bg-green-50 border border-green-200 rounded-lg px-4 py-3 shadow-sm">
                                 {success}
                             </div>
                         )}
+                    </div>
+                )}
+
+                <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
+                    <div className="p-6">
 
                         <div className="mb-8">
                             <h2 className="text-2xl font-bold text-center mb-2 text-blue-gray-800">
@@ -1458,7 +1466,7 @@ export default function TaoPhieuNhapKho() {
                                         value={productSearchTerm}
                                         onChange={(e) => setProductSearchTerm(e.target.value)}
                                         placeholder="Tìm theo tên hoặc mã hàng..."
-                                        className="w-full px-3 py-2 border border-blue-gray-300 rounded-lg text-sm bg-white placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300"
+                                        className="w-full px-3 py-2 border border-blue-gray-300 rounded-lg text-sm bg-white placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                     />
                                 </div>
 
