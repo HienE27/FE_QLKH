@@ -10,7 +10,7 @@ interface Column {
     className?: string;
 }
 
-interface DataTableProps<T extends Record<string, unknown> = Record<string, unknown>> {
+interface DataTableProps<T extends object = Record<string, unknown>> {
     columns: Column[];
     data?: T[];
     loading?: boolean;
@@ -20,7 +20,7 @@ interface DataTableProps<T extends Record<string, unknown> = Record<string, unkn
     startIndex?: number;
 }
 
-export default function DataTable<T extends Record<string, unknown> = Record<string, unknown>>({
+export default function DataTable<T extends object = Record<string, unknown>>({
     columns,
     data = [],
     loading = false,

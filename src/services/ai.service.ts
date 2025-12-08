@@ -53,8 +53,18 @@ export interface DashboardAlertsResponse {
 }
 
 export async function getDashboardAlerts(): Promise<DashboardAlertsResponse> {
-  const response = await apiFetch<ApiResponse<DashboardAlertsResponse>>('/api/ai/dashboard-alerts');
-  return response.data;
+  try {
+    // BE exposes /api/ai/dashboard-alerts in AiAdvancedController
+    const response = await apiFetch<ApiResponse<DashboardAlertsResponse>>('/api/ai/dashboard-alerts');
+    return response.data;
+  } catch (err) {
+    // Nếu BE chưa có endpoint /api/ai-alerts hoặc trả 404 thì trả về rỗng để tránh crash UI
+    const message = err instanceof Error ? err.message : '';
+    if (message.includes('404')) {
+      return { alerts: [], summary: '' };
+    }
+    throw err;
+  }
 }
 
 // ======================== 2. ABC ANALYSIS ========================

@@ -69,15 +69,15 @@ export default function CategoryManagementPage() {
       try {
         setError(null);
         setLoading(true);
-        const page = await searchCategories({
+        const response = await searchCategories({
           code: undefined,
           name: undefined,
           page: page - 1,
         size: PAGE_SIZE,
       });
-      setCategories(page.content);
-      setTotalPages(page.totalPages);
-      setTotalItems(page.totalElements);
+        setCategories(response.content);
+        setTotalPages(response.totalPages);
+        setTotalItems(response.totalElements);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Không thể tải danh mục';
@@ -191,7 +191,7 @@ export default function CategoryManagementPage() {
 
           {/* Table */}
           <div className="px-6 pb-6">
-            <DataTable
+            <DataTable<Category>
               columns={[
                 { key: 'stt', label: 'STT', align: 'left' },
                 { key: 'name', label: 'Tên danh mục', align: 'left' },
@@ -211,7 +211,7 @@ export default function CategoryManagementPage() {
                   <td className="px-4 text-sm text-blue-gray-600">{cat.description || '—'}</td>
                   <td className="px-4">
                     <ActionButtons
-                      onEdit={() => router.push(`/categories/categories/edit/${cat.id}`)}
+                      onEdit={() => router.push(`/categories/product-categories/edit/${cat.id}`)}
                       onDelete={() => handleDelete(cat.id)}
                       disabled={deletingId === cat.id}
                     />

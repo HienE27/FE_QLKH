@@ -68,15 +68,15 @@ export default function StoreManagementPage() {
             try {
                 setError(null);
                 setLoading(true);
-                const page = await searchStores({
+                const response = await searchStores({
                     code: undefined,
                     name: undefined,
                     page: page - 1,
                     size: PAGE_SIZE,
                 });
-                setStores(page.content);
-                setTotalPages(page.totalPages);
-                setTotalItems(page.totalElements);
+                setStores(response.content);
+                setTotalPages(response.totalPages);
+                setTotalItems(response.totalElements);
             } catch (err) {
                 const message =
                     err instanceof Error ? err.message : 'Không thể tải danh sách kho hàng';

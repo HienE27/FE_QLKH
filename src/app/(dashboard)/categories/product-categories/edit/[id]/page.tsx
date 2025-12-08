@@ -90,7 +90,7 @@ export default function EditCategoryPage() {
         </p>
         <button
           type="button"
-          onClick={() => router.push('/categories/categories')}
+          onClick={() => router.push('/categories/product-categories')}
           className="px-6 py-2 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg text-sm font-semibold transition-colors"
         >
           Quay lại danh sách
@@ -189,7 +189,7 @@ export default function EditCategoryPage() {
             <div className="flex justify-end gap-4 pt-6 border-t border-gray-200 mt-8">
               <button
                 type="button"
-                onClick={() => router.push('/categories/categories')}
+                onClick={() => router.push('/categories/product-categories')}
                 className="px-8 py-3 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200"
               >
                 Hủy

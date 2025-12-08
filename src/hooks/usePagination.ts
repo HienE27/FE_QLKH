@@ -12,7 +12,7 @@ interface UsePaginationOptions<T> {
     totalPages?: number;
 }
 
-export function usePagination<T = any>(
+export function usePagination<T = unknown>(
     optionsOrData: UsePaginationOptions<T> | T[],
     itemsPerPage: number = PAGE_SIZE
 ) {

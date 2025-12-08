@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { ensureVnFont } from '@/lib/pdf';
 import { usePagination } from '@/hooks/usePagination';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
     searchImportsPaged,
     getAllImports,
@@ -12,6 +14,10 @@ import {
     type ExportStatus,
     type PageResponse,
 } from '@/services/inventory.service';
+import ReportFilters from '../components/ReportFilters';
+import ReportSummary from '../components/ReportSummary';
+import ReportTable from '../components/ReportTable';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 
 type FilterStatus = ExportStatus | 'ALL';
 type SortField = 'date' | 'value';
@@ -30,12 +36,16 @@ const statusLabels: Record<ExportStatus, string> = {
 const statusColor: Record<ExportStatus, string> = {
     PENDING: 'bg-yellow-100 text-yellow-700',
     IMPORTED: 'bg-green-100 text-green-700',
-    CANCELLED: 'bg-blue-gray-100 text-blue-gray-700',
+    CANCELLED: 'bg-red-100 text-red-700', // Đã hủy: tô đỏ cho dễ nhận biết
     APPROVED: 'bg-emerald-100 text-emerald-700',
     REJECTED: 'bg-red-100 text-red-600',
     EXPORTED: 'bg-blue-100 text-blue-700',
     RETURNED: 'bg-purple-100 text-purple-700',
 };
+
+const VIRTUAL_ROW_HEIGHT = 56;
+const VIRTUAL_VIEWPORT_HEIGHT = 520;
+const VIRTUAL_OVERSCAN = 8;
 
 const defaultFilters = {
     code: '',
@@ -48,6 +58,7 @@ const defaultFilters = {
 import { formatPrice, formatDateTime } from '@/lib/utils';
 
 export default function ImportReportPage() {
+    const queryClient = useQueryClient();
     const [pageData, setPageData] = useState<PageResponse<SupplierImport> | null>(null);
     const [filteredData, setFilteredData] = useState<SupplierImport[]>([]);
     const [allData, setAllData] = useState<SupplierImport[]>([]); // Tất cả dữ liệu để tính thống kê
@@ -57,11 +68,29 @@ export default function ImportReportPage() {
 
     const [filters, setFilters] = useState(defaultFilters);
     const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [virtualScrollTop, setVirtualScrollTop] = useState(0);
+    const debouncedFilters = {
+        ...filters,
+        supplier: useDebounce(filters.supplier, 400),
+        code: useDebounce(filters.code, 400),
+    };
 
     const [sortField, setSortField] = useState<SortField>('date');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const statusOptions = useMemo(
+    () => [
+      { value: 'ALL', label: 'Tất cả' },
+      ...Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
 
     const itemsPerPage = PAGE_SIZE;
+
+  const handleFilterChange = (next: Partial<typeof filters>) => {
+    setFilters((prev) => ({ ...prev, ...next }));
+  };
 
     const applyClientFilters = (
         data: SupplierImport[],
@@ -76,84 +105,81 @@ export default function ImportReportPage() {
         );
     };
 
-    // Load tất cả dữ liệu để tính thống kê (chỉ gọi khi filters thay đổi)
-    const loadAllData = async (activeFilters = appliedFilters) => {
-        try {
+    // Query all data for statistics
+    const allQuery = useQuery({
+        queryKey: ['imports-report-all', appliedFilters],
+        queryFn: async () => {
             const allImports = await getAllImports({
-                status:
-                    activeFilters.status === 'ALL'
-                        ? 'ALL'
-                        : activeFilters.status,
-                code: activeFilters.code || undefined,
-                from: activeFilters.from || undefined,
-                to: activeFilters.to || undefined,
+                status: appliedFilters.status === 'ALL' ? undefined : appliedFilters.status,
+                code: appliedFilters.code || undefined,
+                from: appliedFilters.from || undefined,
+                to: appliedFilters.to || undefined,
             });
+            return applyClientFilters(allImports, appliedFilters.supplier);
+        },
+        staleTime: 60_000,
+    });
 
-            // Áp dụng filter supplier (client-side)
-            const filteredAll = applyClientFilters(allImports, activeFilters.supplier);
-            setAllData(filteredAll);
-            return filteredAll;
-        } catch (err) {
-            console.error('Failed to load all import data', err);
-            throw err;
-        }
-    };
-
-    const fetchReportData = async (pageToLoad: number = 1, activeFilters = appliedFilters, skipAllData = false) => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            // Chỉ load allData nếu filters thay đổi hoặc chưa có data
-            if (!skipAllData && (!allData.length || JSON.stringify(activeFilters) !== JSON.stringify(appliedFilters))) {
-                await loadAllData(activeFilters);
-            }
-
-            // Load dữ liệu phân trang để hiển thị bảng
-            const response = await searchImportsPaged({
-                status:
-                    activeFilters.status === 'ALL'
-                        ? 'ALL'
-                        : activeFilters.status,
-                code: activeFilters.code || undefined,
-                from: activeFilters.from || undefined,
-                to: activeFilters.to || undefined,
-                page: pageToLoad - 1,
+    // Query paginated data for table
+    const pageQuery = useQuery({
+        queryKey: ['imports-report', appliedFilters, currentPage, sortField, sortDirection],
+        queryFn: async () =>
+            searchImportsPaged({
+                status: appliedFilters.status === 'ALL' ? undefined : appliedFilters.status,
+                code: appliedFilters.code || undefined,
+                from: appliedFilters.from || undefined,
+                to: appliedFilters.to || undefined,
+                page: currentPage - 1,
                 size: itemsPerPage,
                 sortField,
                 sortDir: sortDirection,
-            });
+            }),
+        keepPreviousData: true,
+        staleTime: 60_000,
+    });
 
-            setPageData(response);
-            setFilteredData(applyClientFilters(response.content, activeFilters.supplier));
-            // Note: currentPage được quản lý bởi usePagination hook
-        } catch (err) {
-            console.error('Failed to load import report', err);
+    // Đồng bộ dữ liệu từ React Query về state hiển thị
+    useEffect(() => {
+        if (allQuery.data) {
+            setAllData(allQuery.data);
+            setError(null);
+        }
+        if (allQuery.error) {
+            console.error('Failed to load all import data', allQuery.error);
             setError(
-                err instanceof Error
-                    ? err.message
+                allQuery.error instanceof Error
+                    ? allQuery.error.message
                     : 'Không thể tải báo cáo phiếu nhập',
             );
-        } finally {
-            setLoading(false);
         }
-    };
+    }, [allQuery.data, allQuery.error]);
 
     useEffect(() => {
-        fetchReportData(1, defaultFilters);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        if (pageQuery.data) {
+            setPageData(pageQuery.data);
+            setFilteredData(applyClientFilters(pageQuery.data.content, appliedFilters.supplier));
+            setError(null);
+        }
+        if (pageQuery.error) {
+            console.error('Failed to load import report', pageQuery.error);
+            setError(
+                pageQuery.error instanceof Error
+                    ? pageQuery.error.message
+                    : 'Không thể tải báo cáo phiếu nhập',
+            );
+        }
+    }, [pageQuery.data, pageQuery.error, appliedFilters.supplier]);
 
     useEffect(() => {
-        if (!pageData) return;
-        const filtered = applyClientFilters(pageData.content, appliedFilters.supplier);
-        setFilteredData(filtered);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pageData, appliedFilters.supplier]);
+        setLoading(pageQuery.isFetching && currentPage === 1);
+    }, [pageQuery.isFetching, currentPage]);
 
     const handleSearch = () => {
-        setAppliedFilters(filters);
-        fetchReportData(1, filters);
+        const nextFilters = { ...filters, supplier: debouncedFilters.supplier, code: debouncedFilters.code };
+        setAppliedFilters(nextFilters);
+        setCurrentPage(1);
+        queryClient.invalidateQueries({ queryKey: ['imports-report'] });
+        queryClient.invalidateQueries({ queryKey: ['imports-report-all'] });
     };
 
     const handleReset = () => {
@@ -161,7 +187,9 @@ export default function ImportReportPage() {
         setAppliedFilters(defaultFilters);
         setSortField('date');
         setSortDirection('desc');
-        fetchReportData(1, defaultFilters);
+        setCurrentPage(1);
+        queryClient.invalidateQueries({ queryKey: ['imports-report'] });
+        queryClient.invalidateQueries({ queryKey: ['imports-report-all'] });
     };
 
     const toggleSort = (field: SortField) => {
@@ -169,15 +197,8 @@ export default function ImportReportPage() {
         setSortDirection((prev) =>
             sortField === field ? (prev === 'asc' ? 'desc' : 'asc') : 'desc',
         );
+        setCurrentPage(1);
     };
-
-    useEffect(() => {
-        // Reload khi sort thay đổi (trừ lần đầu mount)
-        if (pageData) {
-            fetchReportData(currentPage, appliedFilters);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortField, sortDirection]);
 
     // Tính thống kê dựa trên TẤT CẢ dữ liệu, không chỉ trang hiện tại
     const totalValue = useMemo(
@@ -208,14 +229,48 @@ export default function ImportReportPage() {
     const totalPages = pageData?.totalPages ?? 1;
     const currentData = filteredData;
 
+    const totalVirtualHeight = useMemo(
+        () => currentData.length * VIRTUAL_ROW_HEIGHT,
+        [currentData.length],
+    );
+
+    const startVirtualIndex = useMemo(
+        () => Math.max(0, Math.floor(virtualScrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN),
+        [virtualScrollTop],
+    );
+
+    const endVirtualIndex = useMemo(
+        () =>
+            Math.min(
+                currentData.length,
+                Math.ceil((virtualScrollTop + VIRTUAL_VIEWPORT_HEIGHT) / VIRTUAL_ROW_HEIGHT) + VIRTUAL_OVERSCAN,
+            ),
+        [virtualScrollTop, currentData.length],
+    );
+
+    const visibleRows = useMemo(
+        () => currentData.slice(startVirtualIndex, endVirtualIndex),
+        [currentData, startVirtualIndex, endVirtualIndex],
+    );
+
+    const paddingTop = startVirtualIndex * VIRTUAL_ROW_HEIGHT;
+    const paddingBottom = Math.max(0, totalVirtualHeight - endVirtualIndex * VIRTUAL_ROW_HEIGHT);
+
     // Sử dụng hook usePagination với scroll preservation
-    const { currentPage, handlePageChange, paginationInfo } = usePagination({
+    const { currentPage: pagedPage, handlePageChange, paginationInfo } = usePagination({
         itemsPerPage,
         totalItems,
         totalPages,
-        onPageChange: (page) => fetchReportData(page, appliedFilters, true),
+        onPageChange: (page) => setCurrentPage(page),
     });
     const startIndex = paginationInfo.startIndex;
+
+    useEffect(() => {
+        if (pagedPage !== currentPage) {
+            setCurrentPage(pagedPage);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pagedPage]);
 
     const buildRows = () =>
         allData.map((record, index) => ({
@@ -492,94 +547,115 @@ export default function ImportReportPage() {
                         </section>
 
                         <div className="rounded-xl border border-blue-gray-100 overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="bg-[#0099FF] text-white h-[48px] text-sm font-bold">
-                                            <th className="px-3 text-center w-[80px]">STT</th>
-                                            <th className="px-3 text-left w-[200px]">Mã phiếu</th>
-                                            <th className="px-3 text-left w-[260px]">Nhà cung cấp</th>
-                                            <th className="px-3 text-center w-[200px]">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleSort('date')}
-                                                    className="flex items-center justify-center gap-2 w-full hover:bg-white/10 py-2 rounded transition"
-                                                >
-                                                    Ngày nhập
-                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
-                                                        <path d="M8 3L11 7H5L8 3Z" opacity={sortField === 'date' && sortDirection === 'asc' ? 1 : 0.4} />
-                                                        <path d="M8 13L5 9H11L8 13Z" opacity={sortField === 'date' && sortDirection === 'desc' ? 1 : 0.4} />
-                                                    </svg>
-                                                </button>
-                                            </th>
-                                            <th className="px-3 text-right w-[200px]">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => toggleSort('value')}
-                                                    className="flex items-center justify-center gap-2 w-full hover:bg-white/10 py-2 rounded transition"
-                                                >
-                                                    Tổng tiền
-                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
-                                                        <path d="M8 3L11 7H5L8 3Z" opacity={sortField === 'value' && sortDirection === 'asc' ? 1 : 0.4} />
-                                                        <path d="M8 13L5 9H11L8 13Z" opacity={sortField === 'value' && sortDirection === 'desc' ? 1 : 0.4} />
-                                                    </svg>
-                                                </button>
-                                            </th>
-                                            <th className="px-3 text-center w-[150px]">Trạng thái</th>
-                                            <th className="px-3 text-left">Ghi chú</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {currentData.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={7} className="text-center py-8 text-blue-gray-500">
-                                                    {loading ? 'Đang tải dữ liệu...' : 'Không có dữ liệu'}
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            currentData.map((record, idx) => (
-                                                <tr
-                                                    key={record.id}
-                                                    className="border-b border-blue-gray-200 hover:bg-blue-gray-50 transition-colors h-[48px]"
-                                                >
-                                                    <td className="px-3 text-center text-sm text-blue-gray-800">
-                                                        {startIndex + idx + 1}
-                                                    </td>
-                                                    <td className="px-3 text-left text-sm font-medium">
-                                                        {record.code}
-                                                    </td>
-                                                    <td className="px-3 text-left text-sm text-blue-gray-700">
-                                                        {record.supplierName || '-'}
-                                                    </td>
-                                                    <td className="px-3 text-center text-sm text-blue-gray-700">
-                                                        {formatDateTime(record.importsDate)}
-                                                    </td>
-                                                    <td className="px-3 text-right text-sm font-semibold text-green-600">
-                                                        {formatPrice(record.totalValue || 0)}
-                                                    </td>
-                                                    <td className="px-3 text-center">
-                                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor[record.status]}`}>
-                                                            {statusLabels[record.status]}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-3 text-left text-sm text-blue-gray-600">
-                                                        {record.note || record.description || '-'}
-                                                    </td>
+                            {loading ? (
+                                <TableSkeleton columns={7} rows={8} />
+                            ) : (
+                                <>
+                                    <div className="overflow-x-auto">
+                                        <div
+                                            className="max-h-[520px] overflow-auto"
+                                            onScroll={(e) => setVirtualScrollTop(e.currentTarget.scrollTop)}
+                                            style={{ height: VIRTUAL_VIEWPORT_HEIGHT }}
+                                        >
+                                            <table className="w-full min-w-[900px]">
+                                                <thead>
+                                                    <tr className="bg-[#0099FF] text-white h-[48px] text-sm font-bold sticky top-0 z-10">
+                                                    <th className="px-4 text-center w-[80px]">STT</th>
+                                                    <th className="px-4 text-left w-[200px]">Mã phiếu</th>
+                                                    <th className="px-4 text-left w-[260px]">Nhà cung cấp</th>
+                                                    <th className="px-4 text-center w-[200px]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSort('date')}
+                                                            className="flex items-center justify-center gap-2 w-full hover:bg-white/10 py-2 rounded transition"
+                                                        >
+                                                            Ngày nhập
+                                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+                                                                <path d="M8 3L11 7H5L8 3Z" opacity={sortField === 'date' && sortDirection === 'asc' ? 1 : 0.4} />
+                                                                <path d="M8 13L5 9H11L8 13Z" opacity={sortField === 'date' && sortDirection === 'desc' ? 1 : 0.4} />
+                                                            </svg>
+                                                        </button>
+                                                    </th>
+                                                    <th className="px-4 text-right w-[200px]">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSort('value')}
+                                                            className="flex items-center justify-center gap-2 w-full hover:bg-white/10 py-2 rounded transition"
+                                                        >
+                                                            Tổng tiền
+                                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="white">
+                                                                <path d="M8 3L11 7H5L8 3Z" opacity={sortField === 'value' && sortDirection === 'asc' ? 1 : 0.4} />
+                                                                <path d="M8 13L5 9H11L8 13Z" opacity={sortField === 'value' && sortDirection === 'desc' ? 1 : 0.4} />
+                                                            </svg>
+                                                        </button>
+                                                    </th>
+                                                    <th className="px-4 text-center w-[150px]">Trạng thái</th>
+                                                    <th className="px-4 text-left">Ghi chú</th>
                                                 </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                                            </thead>
+                                                <tbody>
+                                                    {currentData.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={7} className="text-center py-8 text-blue-gray-500">
+                                                                Không có dữ liệu
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        <>
+                                                            <tr style={{ height: paddingTop }} aria-hidden />
+                                                            {visibleRows.map((record, idx) => {
+                                                                const actualIndex = startIndex + startVirtualIndex + idx + 1;
+                                                                return (
+                                                                    <tr
+                                                                        key={record.id ?? `${startVirtualIndex}-${idx}`}
+                                                                        className="border-b border-blue-gray-200 hover:bg-blue-gray-50 transition-colors h-[48px]"
+                                                                    >
+                                                                        <td className="px-4 text-center text-sm text-blue-gray-800">
+                                                                            {actualIndex}
+                                                                        </td>
+                                                                        <td className="px-4 text-left text-sm font-medium">
+                                                                            {record.code}
+                                                                        </td>
+                                                                        <td className="px-4 text-left text-sm text-blue-gray-700">
+                                                                            {record.supplierName || '-'}
+                                                                        </td>
+                                                                        <td className="px-4 text-center text-sm text-blue-gray-700 whitespace-nowrap">
+                                                                            {formatDateTime(record.importsDate)}
+                                                                        </td>
+                                                                        <td className="px-4 text-right text-sm font-semibold text-green-600">
+                                                                            {formatPrice(record.totalValue || 0)}
+                                                                        </td>
+                                                                        <td className="px-4 text-center">
+                                                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor[record.status]}`}>
+                                                                                {statusLabels[record.status]}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-4 text-left text-sm text-blue-gray-600">
+                                                                            {record.note || record.description || '-'}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                            <tr style={{ height: paddingBottom }} aria-hidden />
+                                                        </>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
 
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            totalItems={totalItems}
-                            itemsPerPage={itemsPerPage}
-                            onPageChange={handlePageChange}
-                        />
+                                    <div className="p-4">
+                                        <Pagination
+                                            currentPage={currentPage}
+                                            totalPages={totalPages}
+                                            totalItems={totalItems}
+                                            itemsPerPage={itemsPerPage}
+                                            onPageChange={handlePageChange}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
         </>

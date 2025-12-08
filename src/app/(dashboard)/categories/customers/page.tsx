@@ -81,16 +81,16 @@ export default function QuanLyKhachHang() {
             try {
                 setLoading(true);
                 setError(null);
-                const page = await searchCustomers({
+                const response = await searchCustomers({
                     code: undefined,
                     name: undefined,
                     phone: undefined,
                     page: page - 1,
                 size: PAGE_SIZE,
             });
-            setData(page.content);
-            setTotalPages(page.totalPages);
-            setTotalItems(page.totalElements);
+                setData(response.content);
+                setTotalPages(response.totalPages);
+                setTotalItems(response.totalElements);
             } catch (e) {
                 const msg =
                     e instanceof Error

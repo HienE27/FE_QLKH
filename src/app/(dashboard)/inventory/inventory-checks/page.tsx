@@ -137,13 +137,13 @@ export default function InventoryChecksPage() {
 
     return (
         <>
-            <div className="mb-12">
-                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Kiểm kê kho</h1>
-                <p className="text-sm text-blue-gray-600 uppercase">Quản lý kiểm kê kho</p>
-            </div>
+                <div className="mb-12">
+                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Kiểm kê kho</h1>
+                    <p className="text-sm text-blue-gray-600 uppercase">Quản lý kiểm kê kho</p>
+                </div>
 
-            {/* Content Container */}
-            <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
+                {/* Content Container */}
+                <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     <FilterSection
                             error={error}
                             onClearFilter={handleClearFilters}

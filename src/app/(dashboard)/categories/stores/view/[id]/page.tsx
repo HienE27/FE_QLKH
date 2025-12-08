@@ -235,7 +235,7 @@ export default function ViewStorePage() {
                                                                 <button
                                                                     onClick={() =>
                                                                         router.push(
-                                                                            `/dashboard/products/detail/${product.productId}`,
+                                                                            `/products/detail/${product.productId}`,
                                                                         )
                                                                     }
                                                                     className="text-blue-600 hover:text-blue-800 hover:underline"

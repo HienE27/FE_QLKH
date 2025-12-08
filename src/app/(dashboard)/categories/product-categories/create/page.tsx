@@ -96,7 +96,7 @@ export default function CreateCategoryPage() {
               <div className="flex justify-end gap-4 pt-6 border-t border-gray-200 mt-8">
                 <button
                   type="button"
-                  onClick={() => router.push('/categories/categories')}
+                  onClick={() => router.push('/categories/product-categories')}
                   className="px-8 py-3 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200"
                 >
                   Hủy

@@ -1423,7 +1423,7 @@ export default function TaoPhieuXuatKho() {
                             <button
                                 className="px-8 py-3 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transition-all duration-200"
                                 onClick={() =>
-                                    router.push('/dashboard/products/export/export-receipts')
+                                    router.push('/exports')
                                 }
                             >
                                 Hủy

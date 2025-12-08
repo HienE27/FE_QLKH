@@ -1,11 +1,17 @@
-// src/app/(dashboard)/dashboard/products/page.tsx
+// src/app/(dashboard)/products/page.tsx
 'use client';
 
 import {
   useState,
   useEffect,
+  useMemo,
   type SyntheticEvent,
 } from 'react';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import FilterSection from '@/components/common/FilterSection';
 import DataTable from '@/components/common/DataTable';
@@ -21,6 +27,7 @@ import { getAllStock, type StockByStore } from '@/services/stock.service';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
 import { useDebounce } from '@/hooks/useDebounce';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 
 type SortKey = 'name' | 'code' | 'unitPrice';
 type SortDirection = 'asc' | 'desc';
@@ -46,12 +53,19 @@ export default function ProductsPage() {
   const debouncedSearchCode = useDebounce(searchCode, 500);
   const debouncedSearchName = useDebounce(searchName, 500);
 
-  // pagination state (backend)
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  // pagination state
+  const [page, setPage] = useState(1);
+  const [virtualScrollTop, setVirtualScrollTop] = useState(0);
   const pageSize = PAGE_SIZE;
-  const supplierMap = new Map<number, string>();
-  suppliers.forEach((s) => supplierMap.set(s.id, s.name));
+  const supplierMap = useMemo(() => {
+    const map = new Map<number, string>();
+    suppliers.forEach((s) => map.set(s.id, s.name));
+    return map;
+  }, [suppliers]);
+
+  const VIRTUAL_ROW_HEIGHT = 72;
+  const VIRTUAL_VIEWPORT_HEIGHT = 560;
+  const VIRTUAL_OVERSCAN = 8;
 
   // ===========================
   // LOAD SUPPLIERS & STOCKS (chỉ load 1 lần khi mount)
@@ -93,57 +107,84 @@ export default function ProductsPage() {
     loadStaticData();
   }, []); // Chỉ chạy 1 lần khi mount
 
-  // ===========================
-  // LOAD PRODUCTS (chỉ load products khi chuyển trang hoặc search)
-  // ===========================
-  const loadProducts = async (page: number = 1, isPagination: boolean = false) => {
-    try {
-      // Nếu là pagination thì dùng paginationLoading, nếu không thì dùng loading chính
-      if (isPagination) {
-        setPaginationLoading(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
+  const queryClient = useQueryClient();
 
-      // Chỉ load products, không load lại suppliers và stocks
-      const productPage = await searchProducts({
+  // ===========================
+  // LOAD PRODUCTS (React Query)
+  // ===========================
+  const productsQuery = useQuery({
+    queryKey: ['products', debouncedSearchCode, debouncedSearchName, fromDate, toDate, page],
+    queryFn: () =>
+      searchProducts({
         code: debouncedSearchCode || undefined,
         name: debouncedSearchName || undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
         page: page - 1, // Backend dùng 0-based
         size: pageSize,
-      });
-
-      setData(productPage.content);
-      setTotalPages(productPage.totalPages);
-      setTotalItems(productPage.totalElements);
-    } catch (err: unknown) {
+      }),
+    keepPreviousData: true,
+    staleTime: 60_000,
+    onError: (err: unknown) => {
       const message =
-        err instanceof Error
-          ? err.message
-          : 'Lỗi tải dữ liệu hàng hóa';
+        err instanceof Error ? err.message : 'Lỗi tải dữ liệu hàng hóa';
       setError(message);
-    } finally {
-      if (isPagination) {
-        setPaginationLoading(false);
-      } else {
-        setLoading(false);
-      }
-    }
-  };
+    },
+  });
 
   useEffect(() => {
-    loadProducts(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearchCode, debouncedSearchName, fromDate, toDate]);
+    if (productsQuery.isError) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPaginationLoading(false);
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(productsQuery.isFetching && page === 1);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPaginationLoading(productsQuery.isFetching && page > 1);
+    if (productsQuery.data) {
+      setData(productsQuery.data.content);
+      setError(null);
+    }
+  }, [productsQuery.isFetching, productsQuery.data, productsQuery.isError, page]);
+
+  const totalPages = productsQuery.data?.totalPages ?? 1;
+  const totalItems = productsQuery.data?.totalElements ?? 0;
+
+  const totalVirtualHeight = useMemo(
+    () => data.length * VIRTUAL_ROW_HEIGHT,
+    [data.length],
+  );
+
+  const startVirtualIndex = useMemo(
+    () => Math.max(0, Math.floor(virtualScrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN),
+    [virtualScrollTop],
+  );
+
+  const endVirtualIndex = useMemo(
+    () =>
+      Math.min(
+        data.length,
+        Math.ceil((virtualScrollTop + VIRTUAL_VIEWPORT_HEIGHT) / VIRTUAL_ROW_HEIGHT) + VIRTUAL_OVERSCAN,
+      ),
+    [virtualScrollTop, data.length],
+  );
+
+  const visibleRows = useMemo(
+    () => data.slice(startVirtualIndex, endVirtualIndex),
+    [data, startVirtualIndex, endVirtualIndex],
+  );
+
+  const paddingTop = startVirtualIndex * VIRTUAL_ROW_HEIGHT;
+  const paddingBottom = Math.max(0, totalVirtualHeight - endVirtualIndex * VIRTUAL_ROW_HEIGHT);
 
   // ===========================
   // HANDLERS
   // ===========================
   const handleSearchClick = () => {
-    loadProducts(1);
+    setPage(1);
   };
 
   const handleResetFilter = async () => {
@@ -152,8 +193,7 @@ export default function ProductsPage() {
     setFromDate('');
     setToDate('');
     resetPage(); // Reset về trang 1 thông qua hook
-    // Chỉ load products, không load lại suppliers và stocks
-    await loadProducts(1);
+    setPage(1);
   };
 
   // Sử dụng hook usePagination với scroll preservation
@@ -161,27 +201,32 @@ export default function ProductsPage() {
     itemsPerPage: pageSize,
     totalItems,
     totalPages,
-    onPageChange: (page: number) => loadProducts(page, true), // Chỉ load products khi chuyển trang, dùng paginationLoading
+    onPageChange: (nextPage: number) => setPage(nextPage), // React Query sẽ tự fetch
   });
 
 
   // ===========================
   // DELETE
   // ===========================
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteProduct(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (err: unknown) => {
+      const message =
+        err instanceof Error ? err.message : 'Xóa hàng hóa thất bại';
+      setError(message);
+    },
+  });
+
   const handleDelete = async (id: number, name: string) => {
     const ok = window.confirm(
       `Bạn có chắc chắn muốn xóa hàng hóa "${name}" không?`,
     );
     if (!ok) return;
 
-    try {
-      await deleteProduct(id);
-      await loadProducts(currentPage); // Reload products sau khi xóa, giữ nguyên trang hiện tại
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Xóa hàng hóa thất bại';
-      setError(message);
-    }
+    deleteMutation.mutate(id);
   };
 
   // ===========================
@@ -318,116 +363,152 @@ export default function ProductsPage() {
 
           {/* Table */}
           <div className="px-6 pb-6">
-            <DataTable<Product>
-              columns={[
-                { key: 'stt', label: 'STT', align: 'center' },
-                { key: 'image', label: 'Hình ảnh', align: 'center' },
-                { key: 'name', label: 'Tên hàng', align: 'center' },
-                { key: 'code', label: 'Mã hàng', align: 'center' },
-                { key: 'category', label: 'Nhóm hàng', align: 'center' },
-                { key: 'supplier', label: 'Nguồn hàng', align: 'center' },
-                { key: 'unit', label: 'Đơn vị tính', align: 'center' },
-                { key: 'stock', label: 'Tồn kho', align: 'center' },
-                { key: 'stores', label: 'Kho hàng', align: 'left' },
-                { key: 'price', label: 'Đơn giá', align: 'center' },
-                { key: 'actions', label: 'Thao tác', align: 'center' },
-              ]}
-              data={data}
-              loading={loading || paginationLoading} // Hiển thị loading khi search hoặc pagination
-              emptyMessage="Không có dữ liệu"
-              startIndex={(currentPage - 1) * pageSize}
-              renderRow={(product: Product, index: number) => {
-                const imageUrl = buildImageUrl(product.image ?? null);
-                return (
-                  <>
-                    <td className="px-4 text-center text-sm text-blue-gray-800">
-                      {(currentPage - 1) * pageSize + index + 1}
-                    </td>
-                    <td className="px-4 text-center">
-                      {imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={imageUrl}
-                          alt={product.name}
-                          className="h-10 w-10 object-cover rounded mx-auto"
-                          onError={(e: SyntheticEvent<HTMLImageElement>) => {
-                            const target = e.currentTarget;
-                            target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%23ddd" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="10"%3ENo%3C/text%3E%3C/svg%3E';
-                          }}
-                        />
-                      ) : (
-                        <div className="h-10 w-10 bg-blue-gray-200 rounded mx-auto flex items-center justify-center text-blue-gray-600 text-xs">
-                          N/A
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 text-center text-sm text-blue-gray-800">
-                      {product.name}
-                    </td>
-                    <td className="px-4 text-center text-sm text-blue-gray-800">
-                      {product.code}
-                    </td>
-                    <td className="px-4 text-center text-sm text-blue-gray-600">
-                      {product.categoryName ?? '-'}
-                    </td>
-                    <td className="px-4 text-center text-sm text-blue-gray-600">
-                      {product.supplierId != null
-                        ? supplierMap.get(product.supplierId) ?? `NCC #${product.supplierId}`
-                        : '-'}
-                    </td>
-                    <td className="px-4 text-center text-sm text-blue-gray-600">Cái</td>
-                    <td className="px-4 text-center text-sm font-semibold text-blue-gray-800">
-                      {stockMap.get(product.id) ?? 0}
-                    </td>
-                    <td className="px-4 text-left text-sm">
-                      {(() => {
-                        const stocks = stockDetailsMap.get(product.id) || [];
-                        if (stocks.length === 0) {
-                          return <span className="text-blue-gray-400">-</span>;
-                        }
-                        return (
-                          <div className="space-y-1.5">
-                            {stocks.map((stock) => (
-                              <div key={stock.storeId} className="flex items-center justify-between gap-2">
-                                <button
-                                  onClick={() => router.push(`/categories/stores/view/${stock.storeId}`)}
-                                  className="text-left font-medium text-[#0099FF] hover:text-[#0088EE] hover:underline transition-colors truncate flex-1"
-                                  title={stock.storeName || `Kho #${stock.storeId}`}
-                                >
-                                  {stock.storeName || `Kho #${stock.storeId}`}
-                                </button>
-                                <span className="font-semibold text-blue-gray-800 whitespace-nowrap">
-                                  {stock.quantity}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-4 text-center text-sm text-blue-gray-800">
-                      {formatPrice(product.unitPrice)}
-                    </td>
-                    <td className="px-4">
-                      <ActionButtons
-                        onView={() => router.push(`/products/detail/${product.id}`)}
-                        onEdit={() => router.push(`/products/edit/${product.id}`)}
-                        onDelete={() => handleDelete(product.id, product.name)}
+            <div className="rounded-xl border border-blue-gray-100 overflow-hidden">
+              {loading || paginationLoading ? (
+                <TableSkeleton columns={10} rows={8} />
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <div
+                      className="max-h-[560px] overflow-auto"
+                      onScroll={(e) => setVirtualScrollTop(e.currentTarget.scrollTop)}
+                      style={{ height: VIRTUAL_VIEWPORT_HEIGHT }}
+                    >
+                      <table className="w-full min-w-[1100px]">
+                        <thead>
+                          <tr className="bg-[#0099FF] text-white h-[48px] text-sm font-bold sticky top-0 z-10">
+                            <th className="px-4 text-center w-[70px]">STT</th>
+                            <th className="px-4 text-center w-[110px]">Hình ảnh</th>
+                            <th className="px-4 text-center w-[200px]">Tên hàng</th>
+                            <th className="px-4 text-center w-[150px]">Mã hàng</th>
+                            <th className="px-4 text-center w-[170px]">Nhóm hàng</th>
+                            <th className="px-4 text-center w-[170px]">Nguồn hàng</th>
+                            <th className="px-4 text-center w-[120px]">Đơn vị tính</th>
+                            <th className="px-4 text-center w-[120px]">Tồn kho</th>
+                            <th className="px-4 text-left w-[260px]">Kho hàng</th>
+                            <th className="px-4 text-center w-[150px]">Đơn giá</th>
+                            <th className="px-4 text-center w-[140px]">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.length === 0 ? (
+                            <tr>
+                              <td colSpan={11} className="text-center py-8 text-blue-gray-500">
+                                Không có dữ liệu
+                              </td>
+                            </tr>
+                          ) : (
+                            <>
+                              <tr style={{ height: paddingTop }} aria-hidden />
+                              {visibleRows.map((product, index) => {
+                                const actualIndex = (currentPage - 1) * pageSize + startVirtualIndex + index + 1;
+                                const imageUrl = buildImageUrl(product.image ?? null);
+                                return (
+                                  <tr
+                                    key={product.id ?? `${startVirtualIndex}-${index}`}
+                                    className="border-b border-blue-gray-200 hover:bg-blue-gray-50 transition-colors h-[72px]"
+                                  >
+                                    <td className="px-4 text-center text-sm text-blue-gray-800">
+                                      {actualIndex}
+                                    </td>
+                                    <td className="px-4 text-center">
+                                      {imageUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={imageUrl}
+                                          alt={product.name}
+                                          className="h-10 w-10 object-cover rounded mx-auto"
+                                          onError={(e: SyntheticEvent<HTMLImageElement>) => {
+                                            const target = e.currentTarget;
+                                            target.src =
+                                              'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%23ddd" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="10"%3ENo%3C/text%3E%3C/svg%3E';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="h-10 w-10 bg-blue-gray-200 rounded mx-auto flex items-center justify-center text-blue-gray-600 text-xs">
+                                          N/A
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="px-4 text-center text-sm text-blue-gray-800">
+                                      {product.name}
+                                    </td>
+                                    <td className="px-4 text-center text-sm text-blue-gray-800">
+                                      {product.code}
+                                    </td>
+                                    <td className="px-4 text-center text-sm text-blue-gray-600">
+                                      {product.categoryName ?? '-'}
+                                    </td>
+                                    <td className="px-4 text-center text-sm text-blue-gray-600">
+                                      {product.supplierId != null
+                                        ? supplierMap.get(product.supplierId) ?? `NCC #${product.supplierId}`
+                                        : '-'}
+                                    </td>
+                                    <td className="px-4 text-center text-sm text-blue-gray-600">Cái</td>
+                                    <td className="px-4 text-center text-sm font-semibold text-blue-gray-800">
+                                      {stockMap.get(product.id) ?? 0}
+                                    </td>
+                                    <td className="px-4 text-left text-sm">
+                                      {(() => {
+                                        const stocks = stockDetailsMap.get(product.id) || [];
+                                        if (stocks.length === 0) {
+                                          return <span className="text-blue-gray-400">-</span>;
+                                        }
+                                        return (
+                                          <div className="space-y-1.5">
+                                            {stocks.map((stock) => (
+                                              <div key={stock.storeId} className="flex items-center justify-between gap-2">
+                                                <button
+                                                  onClick={() => router.push(`/categories/stores/view/${stock.storeId}`)}
+                                                  className="text-left font-medium text-[#0099FF] hover:text-[#0088EE] hover:underline transition-colors truncate flex-1"
+                                                  title={stock.storeName || `Kho #${stock.storeId}`}
+                                                >
+                                                  {stock.storeName || `Kho #${stock.storeId}`}
+                                                </button>
+                                                <span className="font-semibold text-blue-gray-800 whitespace-nowrap">
+                                                  {stock.quantity}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        );
+                                      })()}
+                                    </td>
+                                    <td className="px-4 text-center text-sm text-blue-gray-800">
+                                      {formatPrice(product.unitPrice)}
+                                    </td>
+                                    <td className="px-4">
+                                      <ActionButtons
+                                        onView={() => router.push(`/products/detail/${product.id}`)}
+                                        onEdit={() => router.push(`/products/edit/${product.id}`)}
+                                        onDelete={() => handleDelete(product.id, product.name)}
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              <tr style={{ height: paddingBottom }} aria-hidden />
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {!error && totalItems > 0 && (
+                    <div className="p-4">
+                      <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={totalItems}
+                        itemsPerPage={pageSize}
+                        onPageChange={handlePageChange}
                       />
-                    </td>
-                  </>
-                );
-              }}
-            />
-            {!error && totalItems > 0 && (
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={pageSize}
-                onPageChange={handlePageChange}
-              />
-            )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
     </>

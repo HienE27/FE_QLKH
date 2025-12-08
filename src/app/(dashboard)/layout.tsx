@@ -1,12 +1,41 @@
 // src/app/(dashboard)/layout.tsx
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import Sidebar from '@/components/layout/Sidebar';
+import { QueryClientProvider } from '@/providers/QueryClientProvider';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    const routesToPrefetch = [
+      '/dashboard',
+      '/products',
+      '/imports',
+      '/exports',
+      '/categories/product-categories',
+      '/reports/import-report',
+      '/reports/export-report',
+      '/reports/inventory-report',
+      '/profile',
+    ];
+
+    const prefetchFn = (router as unknown as { prefetch?: (href: string) => Promise<void> }).prefetch;
+    if (!prefetchFn) return;
+
+    routesToPrefetch.forEach((route) => {
+      try {
+        // Không cần chờ; prefetch nền để vào nhanh hơn
+        prefetchFn(route);
+      } catch {
+        // Bỏ qua lỗi prefetch (tùy môi trường có thể không hỗ trợ)
+      }
+    });
+  }, [router]);
 
   if (loading) {
     return (
@@ -17,11 +46,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-blue-gray-50/50">
-      <Sidebar />
-      <main className="p-4 xl:ml-80">
-        {children}
-      </main>
-    </div>
+    <QueryClientProvider>
+      <div className="min-h-screen bg-blue-gray-50/50">
+        <Sidebar />
+        <main className="p-4 xl:ml-80">
+          {children}
+        </main>
+      </div>
+    </QueryClientProvider>
   );
 }

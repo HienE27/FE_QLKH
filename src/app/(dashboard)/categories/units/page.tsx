@@ -65,14 +65,14 @@ export default function UnitManagementPage() {
       try {
         setError(null);
         setLoading(true);
-        const page = await searchUnits({
+        const response = await searchUnits({
           name: undefined,
           page: page - 1,
         size: PAGE_SIZE,
       });
-      setUnits(page.content);
-      setTotalPages(page.totalPages);
-      setTotalItems(page.totalElements);
+      setUnits(response.content);
+      setTotalPages(response.totalPages);
+      setTotalItems(response.totalElements);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Không thể tải danh sách đơn vị';

@@ -69,7 +69,7 @@ export default function EditCustomerPage() {
         try {
             setSaving(true);
 
-            const payload: any = {
+            const payload = {
                 code,
                 name,
                 phone,
