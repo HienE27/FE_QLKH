@@ -3,6 +3,7 @@
 
 import { ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import Sidebar from '@/components/layout/Sidebar';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { loading } = useAuth();
@@ -15,5 +16,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-blue-gray-50/50">
+      <Sidebar />
+      <main className="p-4 xl:ml-80">
+        {children}
+      </main>
+    </div>
+  );
 }

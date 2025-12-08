@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Sidebar from '@/components/layout/Sidebar';
 import { getStore, type Store } from '@/services/store.service';
 import { getStockByStore, type StockByStore } from '@/services/stock.service';
 import { getProduct } from '@/services/product.service';
@@ -107,47 +106,34 @@ export default function ViewStorePage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
-                    <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
-                        <p className="text-lg text-blue-gray-600">Đang tải...</p>
-                    </div>
-                </main>
+            <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
+                <p className="text-lg text-blue-gray-600">Đang tải...</p>
             </div>
         );
     }
 
     if (error || !store) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
-                    <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
-                        <p className="text-lg text-red-500">
-                            {error || 'Không tìm thấy kho hàng'}
-                        </p>
-                        <button
-                            onClick={() => router.back()}
-                            className="mt-4 px-4 py-2 bg-[#0099FF] text-white rounded hover:bg-[#0088EE]"
-                        >
-                            Quay lại
-                        </button>
-                    </div>
-                </main>
+            <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
+                <p className="text-lg text-red-500">
+                    {error || 'Không tìm thấy kho hàng'}
+                </p>
+                <button
+                    onClick={() => router.back()}
+                    className="mt-4 px-4 py-2 bg-[#0099FF] text-white rounded hover:bg-[#0088EE]"
+                >
+                    Quay lại
+                </button>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết kho hàng</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">Xem thông tin chi tiết kho hàng</p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết kho hàng</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">Xem thông tin chi tiết kho hàng</p>
+            </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     <div className="p-6">
@@ -332,8 +318,7 @@ export default function ViewStorePage() {
                         </div>
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }
 

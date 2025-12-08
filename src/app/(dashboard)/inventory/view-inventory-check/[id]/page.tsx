@@ -4,8 +4,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
-import Sidebar from '@/components/layout/Sidebar';
-
 import {
     getInventoryCheckById,
     approveInventoryCheck,
@@ -98,34 +96,22 @@ export default function ViewInventoryCheckPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
                     <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
                         <p className="text-xl text-blue-gray-600">Đang tải...</p>
-                    </div>
-                </main>
             </div>
         );
     }
 
     if (!data) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
                     <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
                         <p className="text-xl text-red-500">Không tìm thấy phiếu kiểm kê</p>
-                    </div>
-                </main>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-            <main className="p-4 xl:ml-80">
+        <>
                 <div className="mb-12">
                     <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết phiếu kiểm kê</h1>
                     <p className="text-sm text-blue-gray-600 uppercase">Xem chi tiết phiếu kiểm kê kho hàng</p>
@@ -248,8 +234,7 @@ export default function ViewInventoryCheckPage() {
                         <StatusSidebar data={data} />
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }
 

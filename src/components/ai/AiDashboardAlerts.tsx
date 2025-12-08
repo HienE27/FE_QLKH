@@ -233,7 +233,7 @@ export default function AiDashboardAlerts() {
             📦 Báo cáo tồn kho
           </button>
           <button
-            onClick={() => router.push('/dashboard/products')}
+            onClick={() => router.push('/products')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-xs font-medium transition-colors"
           >
             🛍️ Quản lý hàng hóa

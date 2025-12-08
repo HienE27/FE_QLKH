@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 
-import Sidebar from '@/components/layout/Sidebar';
 import { getSupplier } from '@/services/supplier.service';
 import type { Supplier } from '@/services/supplier.service';
 
@@ -41,39 +40,26 @@ export default function SupplierDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
-                    <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
-                        <p className="text-sm text-blue-gray-600">Đang tải...</p>
-                    </div>
-                </main>
+            <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
+                <p className="text-sm text-blue-gray-600">Đang tải...</p>
             </div>
         );
     }
 
     if (error || !supplier) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
-                    <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
-                        <p className="text-sm text-red-500">{error ?? 'Không tìm thấy nguồn hàng'}</p>
-                    </div>
-                </main>
+            <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
+                <p className="text-sm text-red-500">{error ?? 'Không tìm thấy nguồn hàng'}</p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết nguồn hàng</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">Xem thông tin chi tiết nguồn hàng</p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết nguồn hàng</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">Xem thông tin chi tiết nguồn hàng</p>
+            </div>
 
                 {/* Card */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
@@ -138,7 +124,6 @@ export default function SupplierDetailPage() {
                         </div>
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }

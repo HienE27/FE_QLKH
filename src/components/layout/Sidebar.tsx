@@ -88,12 +88,12 @@ const navSections: NavSection[] = [
     links: [
       {
         label: 'Phiếu nhập kho',
-        href: '/dashboard/products/import/import-receipts',
+        href: '/imports',
         matches: [
-          '/dashboard/products/import/import-receipts',
-          '/dashboard/products/import/create-import-receipt',
-          '/dashboard/products/import/view-import-receipt/',
-          '/dashboard/products/import/edit-import-receipt/',
+          '/imports',
+          '/imports/create',
+          '/imports/view/',
+          '/imports/edit/',
         ],
       },
     ],
@@ -105,12 +105,12 @@ const navSections: NavSection[] = [
     links: [
       {
         label: 'Phiếu xuất kho',
-        href: '/dashboard/products/export/export-receipts',
+        href: '/exports',
         matches: [
-          '/dashboard/products/export/export-receipts',
-          '/dashboard/products/export/create-export-receipt',
-          '/dashboard/products/export/view-export-receipt/',
-          '/dashboard/products/export/edit-export-receipt/',
+          '/exports',
+          '/exports/create',
+          '/exports/view/',
+          '/exports/edit/',
         ],
       },
     ],
@@ -142,22 +142,22 @@ const navSections: NavSection[] = [
       },
       {
         label: 'Danh mục hàng hóa',
-        href: '/dashboard/products',
+        href: '/products',
         matches: [
-          '/dashboard/products',
-          '/dashboard/products/create',
-          '/dashboard/products/edit/',
-          '/dashboard/products/detail/',
+          '/products',
+          '/products/create',
+          '/products/edit/',
+          '/products/detail/',
         ],
       },
       {
         label: 'Quản lý danh mục',
-        href: '/categories/categories',
+        href: '/categories/product-categories',
         matches: [
-          '/categories/categories',
-          '/categories/categories/create',
-          '/categories/categories/edit/',
-          '/categories/categories/detail/',
+          '/categories/product-categories',
+          '/categories/product-categories/create',
+          '/categories/product-categories/edit/',
+          '/categories/product-categories/detail/',
         ],
       },
       {
@@ -234,8 +234,8 @@ const navSections: NavSection[] = [
     links: [
       {
         label: 'Hồ sơ người dùng',
-        href: '/dashboard/profile',
-        matches: ['/dashboard/profile', '/profile'],
+        href: '/profile',
+        matches: ['/profile'],
       },
     ],
   },
@@ -296,10 +296,40 @@ export default function Sidebar() {
 
   useEffect(() => {
     const loadUserProfile = async () => {
+      // Check cache first for instant display
+      if (typeof window !== 'undefined') {
+        const cachedProfile = sessionStorage.getItem('userProfile');
+        if (cachedProfile) {
+          try {
+            const profile = JSON.parse(cachedProfile);
+            setUserProfile(profile);
+            setLoadingProfile(false);
+            
+            // Fetch fresh data in background to update cache
+            try {
+              const freshProfile = await getProfile();
+              sessionStorage.setItem('userProfile', JSON.stringify(freshProfile));
+              setUserProfile(freshProfile);
+            } catch (error) {
+              // Silent fail - keep cached data
+              console.error('Failed to refresh user profile:', error);
+            }
+            return;
+          } catch (error) {
+            // Invalid cache, clear it
+            sessionStorage.removeItem('userProfile');
+          }
+        }
+      }
+
+      // No cache, fetch fresh data
       try {
         setLoadingProfile(true);
         const profile = await getProfile();
         setUserProfile(profile);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('userProfile', JSON.stringify(profile));
+        }
       } catch (error) {
         console.error('Failed to load user profile:', error);
         setUserProfile(null);

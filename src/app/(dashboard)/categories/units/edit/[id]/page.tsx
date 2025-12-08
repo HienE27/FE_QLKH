@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Sidebar from '@/components/layout/Sidebar';
 import { getUnit, updateUnit } from '@/services/unit.service';
 import type { Unit } from '@/types/unit';
 
@@ -77,48 +76,35 @@ export default function EditUnitPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-gray-50/50">
-        <Sidebar />
-        <main className="p-4 xl:ml-80">
-          <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
-            <p className="text-sm text-blue-gray-600">Đang tải dữ liệu...</p>
-          </div>
-        </main>
+      <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
+        <p className="text-sm text-blue-gray-600">Đang tải dữ liệu...</p>
       </div>
     );
   }
 
   if (!unit) {
     return (
-      <div className="min-h-screen bg-blue-gray-50/50">
-        <Sidebar />
-        <main className="p-4 xl:ml-80">
-          <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center space-y-4">
-            <p className="text-sm text-red-500">
-              {error ?? 'Không tìm thấy đơn vị'}
-            </p>
-            <button
-              type="button"
-              onClick={() => router.push('/categories/units')}
-              className="px-6 py-2 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg text-sm font-semibold transition-colors"
-            >
-              Quay lại danh sách
-            </button>
-          </div>
-        </main>
+      <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center space-y-4">
+        <p className="text-sm text-red-500">
+          {error ?? 'Không tìm thấy đơn vị'}
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push('/categories/units')}
+          className="px-6 py-2 bg-[#0099FF] hover:bg-[#0088EE] text-white rounded-lg text-sm font-semibold transition-colors"
+        >
+          Quay lại danh sách
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-blue-gray-50/50">
-      <Sidebar />
-
-      <main className="p-4 xl:ml-80">
-        <div className="mb-12">
-          <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chỉnh sửa đơn vị tính</h1>
-          <p className="text-sm text-blue-gray-600 uppercase">Cập nhật thông tin đơn vị tính</p>
-        </div>
+    <>
+      <div className="mb-12">
+        <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chỉnh sửa đơn vị tính</h1>
+        <p className="text-sm text-blue-gray-600 uppercase">Cập nhật thông tin đơn vị tính</p>
+      </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
           <div className="p-6">
@@ -247,8 +233,7 @@ export default function EditUnitPage() {
             </form>
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }
 

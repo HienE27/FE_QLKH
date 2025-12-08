@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
 import { getProducts } from '@/services/product.service';
 import { getAllStock } from '@/services/stock.service';
 import { getAllExports } from '@/services/inventory.service';
@@ -189,22 +188,15 @@ export default function DemandForecastPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-gray-50/50">
-        <Sidebar />
-        <main className="p-4 xl:ml-80">
           <div className="text-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto"></div>
             <div className="text-xl text-blue-gray-600 mt-4">Đang tải dữ liệu...</div>
-          </div>
-        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-blue-gray-50/50">
-      <Sidebar />
-      <main className="p-4 xl:ml-80">
+    <>
         <div className="mb-12">
           <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Báo cáo dự báo nhu cầu</h1>
           <p className="text-sm text-blue-gray-600 uppercase">Dự đoán nhu cầu nhập hàng dựa trên lịch sử xuất hàng</p>
@@ -412,7 +404,6 @@ export default function DemandForecastPage() {
             )}
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }

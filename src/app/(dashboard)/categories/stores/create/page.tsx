@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar from '@/components/layout/Sidebar';
 import { createStore } from '@/services/store.service';
 
 export default function CreateStorePage() {
@@ -34,14 +33,11 @@ export default function CreateStorePage() {
     };
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Thêm kho hàng</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">Tạo mới kho hàng</p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Thêm kho hàng</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">Tạo mới kho hàng</p>
+            </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     <div className="p-6">
@@ -130,8 +126,7 @@ export default function CreateStorePage() {
                         </form>
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }
 

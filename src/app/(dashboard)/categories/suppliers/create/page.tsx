@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar from '@/components/layout/Sidebar';
 import { createSupplier } from '@/services/supplier.service';
 import { SUPPLIER_TYPES, SUPPLIER_TYPE_LABELS } from '@/types/supplier';
 
@@ -55,14 +54,11 @@ export default function ThemMoiNguon() {
     };
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Thêm nguồn hàng</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">Tạo mới nguồn hàng xuất/nhập</p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Thêm nguồn hàng</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">Tạo mới nguồn hàng xuất/nhập</p>
+            </div>
 
                 {/* Main Form */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
@@ -221,7 +217,6 @@ export default function ThemMoiNguon() {
                         </form>
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }

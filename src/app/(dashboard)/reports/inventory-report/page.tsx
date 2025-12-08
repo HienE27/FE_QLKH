@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
@@ -427,13 +426,11 @@ export default function InventoryReportPage() {
     };
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Báo cáo tồn kho</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">Thống kê và báo cáo tình trạng tồn kho hiện tại</p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Báo cáo tồn kho</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">Thống kê và báo cáo tình trạng tồn kho hiện tại</p>
+            </div>
 
                 {/* Content Container */}
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 max-w-full overflow-hidden">
@@ -892,7 +889,6 @@ export default function InventoryReportPage() {
                         </div>
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }

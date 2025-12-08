@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 
-import Sidebar from '@/components/layout/Sidebar';
 import { getCustomer } from '@/services/customer.service';
 import type { Customer } from '@/services/customer.service';
 
@@ -41,26 +40,16 @@ export default function CustomerDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
                     <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
                         <p className="text-sm text-blue-gray-600">Đang tải...</p>
-                    </div>
-                </main>
             </div>
         );
     }
 
     if (error || !customer) {
         return (
-            <div className="min-h-screen bg-blue-gray-50/50">
-                <Sidebar />
-                <main className="p-4 xl:ml-80">
                     <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100 p-8 text-center">
                         <p className="text-sm text-red-500">{error ?? 'Không tìm thấy khách hàng'}</p>
-                    </div>
-                </main>
             </div>
         );
     }
@@ -68,10 +57,7 @@ export default function CustomerDetailPage() {
     const displayName = customer.name ?? customer.fullName ?? '-';
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-
-            <main className="p-4 xl:ml-80">
+        <>
                 <div className="mb-12">
                     <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết khách hàng</h1>
                     <p className="text-sm text-blue-gray-600 uppercase">Xem thông tin chi tiết khách hàng</p>
@@ -140,7 +126,6 @@ export default function CustomerDetailPage() {
                         </div>
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }

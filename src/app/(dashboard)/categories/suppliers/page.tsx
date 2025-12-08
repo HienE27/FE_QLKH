@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import Sidebar from '@/components/layout/Sidebar';
 import FilterSection from '@/components/common/FilterSection';
 import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
@@ -137,16 +136,14 @@ export default function QuanLyNguonHang() {
     };
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Nguồn hàng nhập</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">Quản lý nguồn hàng nhập</p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Nguồn hàng nhập</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">Quản lý nguồn hàng nhập</p>
+            </div>
 
-                {/* Content Container */}
-                <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
+            {/* Content Container */}
+            <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                         <FilterSection
                             error={error}
                             onClearFilter={handleResetFilter}
@@ -342,7 +339,6 @@ export default function QuanLyNguonHang() {
                         )}
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }

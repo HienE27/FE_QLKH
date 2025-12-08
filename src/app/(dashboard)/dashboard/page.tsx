@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import Sidebar from '@/components/layout/Sidebar';
 import PieChart from '@/components/charts/PieChart';
 import { getProducts } from '@/services/product.service';
 import { getAllImports, getAllExports, type SupplierImport, type SupplierExport } from '@/services/inventory.service';
@@ -217,22 +216,15 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-gray-50/50">
-        <Sidebar />
-        <main className="p-4 xl:ml-80">
-          <div className="text-center py-20">
-            <div className="text-xl text-blue-gray-600">Đang tải dữ liệu...</div>
-          </div>
-        </main>
+      <div className="text-center py-20">
+        <div className="text-xl text-blue-gray-600">Đang tải dữ liệu...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-blue-gray-50/50">
-      <Sidebar />
-      <main className="p-4 xl:ml-80">
-        <div className="mb-12">
+    <>
+      <div className="mb-12">
           <h2 className="text-2xl font-bold text-blue-gray-800 mb-1">
             Tổng quan
           </h2>
@@ -650,7 +642,7 @@ export default function DashboardPage() {
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
             <button
-              onClick={() => router.push('/dashboard/products/import/create-import-receipt')}
+              onClick={() => router.push('/imports/create')}
               className="flex flex-col items-center justify-center p-6 bg-white hover:bg-gray-50 rounded-xl transition-colors border border-gray-200 shadow-sm group"
             >
               <div className="w-12 h-12 bg-[#0099FF] rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -664,7 +656,7 @@ export default function DashboardPage() {
             </button>
 
             <button
-              onClick={() => router.push('/dashboard/products/export/create-export-receipt')}
+              onClick={() => router.push('/exports/create')}
               className="flex flex-col items-center justify-center p-6 bg-white hover:bg-gray-50 rounded-xl transition-colors border border-gray-200 shadow-sm group"
             >
               <div className="w-12 h-12 bg-[#0099FF] rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -721,7 +713,6 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-      </main>
 
       {/* Smart Inventory Alert Popup */}
       {showSmartAlertPopup && (
@@ -739,6 +730,6 @@ export default function DashboardPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }

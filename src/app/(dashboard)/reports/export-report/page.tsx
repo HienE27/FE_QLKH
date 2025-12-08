@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { ensureVnFont } from '@/lib/pdf';
@@ -293,15 +292,13 @@ export default function ExportReportPage() {
     };
 
     return (
-        <div className="min-h-screen bg-blue-gray-50/50">
-            <Sidebar />
-            <main className="p-4 xl:ml-80">
-                <div className="mb-12">
-                    <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Báo cáo phiếu xuất</h1>
-                    <p className="text-sm text-blue-gray-600 uppercase">
-                        Tổng hợp doanh thu và trạng thái phiếu xuất kho
-                    </p>
-                </div>
+        <>
+            <div className="mb-12">
+                <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Báo cáo phiếu xuất</h1>
+                <p className="text-sm text-blue-gray-600 uppercase">
+                    Tổng hợp doanh thu và trạng thái phiếu xuất kho
+                </p>
+            </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                     <div className="p-6 space-y-6">
@@ -585,8 +582,7 @@ export default function ExportReportPage() {
                         />
                     </div>
                 </div>
-            </main>
-        </div>
+        </>
     );
 }
 

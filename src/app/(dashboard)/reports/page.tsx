@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Sidebar from '@/components/layout/Sidebar';
 import {
   getSmartInventoryAlerts,
   getDemandForecast,
@@ -94,13 +93,11 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-blue-gray-50/50">
-      <Sidebar />
-      <main className="p-4 xl:ml-80">
-        <div className="mb-12">
-          <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">📊 Báo cáo AI thông minh</h1>
-          <p className="text-sm text-blue-gray-600 uppercase">Phân tích và dự đoán dựa trên AI</p>
-        </div>
+    <>
+      <div className="mb-12">
+        <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">📊 Báo cáo AI thông minh</h1>
+        <p className="text-sm text-blue-gray-600 uppercase">Phân tích và dự đoán dựa trên AI</p>
+      </div>
 
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-sm p-6 border border-blue-gray-100">
@@ -406,8 +403,7 @@ export default function ReportsPage() {
             )}
           </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }
 
