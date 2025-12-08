@@ -20,6 +20,7 @@ import Pagination from '@/components/common/Pagination';
 import { getAllStock, type StockByStore } from '@/services/stock.service';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
+import { useDebounce } from '@/hooks/useDebounce';
 
 type SortKey = 'name' | 'code' | 'unitPrice';
 type SortDirection = 'asc' | 'desc';
@@ -40,6 +41,10 @@ export default function ProductsPage() {
   const [searchName, setSearchName] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // Debounced values để giảm số lần gọi API
+  const debouncedSearchCode = useDebounce(searchCode, 500);
+  const debouncedSearchName = useDebounce(searchName, 500);
 
   // pagination state (backend)
   const [totalPages, setTotalPages] = useState(1);
@@ -103,8 +108,8 @@ export default function ProductsPage() {
 
       // Chỉ load products, không load lại suppliers và stocks
       const productPage = await searchProducts({
-        code: searchCode || undefined,
-        name: searchName || undefined,
+        code: debouncedSearchCode || undefined,
+        name: debouncedSearchName || undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
         page: page - 1, // Backend dùng 0-based
@@ -132,7 +137,7 @@ export default function ProductsPage() {
   useEffect(() => {
     loadProducts(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchCode, searchName, fromDate, toDate]);
+  }, [debouncedSearchCode, debouncedSearchName, fromDate, toDate]);
 
   // ===========================
   // HANDLERS

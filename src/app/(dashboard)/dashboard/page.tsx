@@ -2,13 +2,25 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import PieChart from '@/components/charts/PieChart';
+import dynamic from 'next/dynamic';
+
+// Lazy load PieChart để giảm bundle size ban đầu
+const PieChart = dynamic(() => import('@/components/charts/PieChart'), {
+  loading: () => <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-[#0099FF] border-t-transparent rounded-full animate-spin"></div></div>,
+  ssr: false,
+});
 import { getProducts } from '@/services/product.service';
 import { getAllImports, getAllExports, type SupplierImport, type SupplierExport } from '@/services/inventory.service';
 import { getSuppliers } from '@/services/supplier.service';
 import { getDashboardAlerts, DashboardAlert } from '@/services/ai.service';
-import SmartInventoryAlertPopup from '@/components/ai/SmartInventoryAlertPopup';
-import AlertProductsPopup from '@/components/ai/AlertProductsPopup';
+
+// Lazy load AI components để giảm bundle size ban đầu
+const SmartInventoryAlertPopup = dynamic(() => import('@/components/ai/SmartInventoryAlertPopup'), {
+  ssr: false,
+});
+const AlertProductsPopup = dynamic(() => import('@/components/ai/AlertProductsPopup'), {
+  ssr: false,
+});
 import { getAllStock } from '@/services/stock.service';
 import { formatPrice } from '@/lib/utils';
 
