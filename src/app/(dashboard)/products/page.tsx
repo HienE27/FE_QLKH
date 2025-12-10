@@ -5,6 +5,7 @@ import {
   useState,
   useEffect,
   useMemo,
+  useCallback,
   type SyntheticEvent,
 } from 'react';
 import {

@@ -56,7 +56,7 @@ export async function getDashboardAlerts(): Promise<DashboardAlertsResponse> {
   try {
     // BE exposes /api/ai/dashboard-alerts in AiAdvancedController
     const response = await apiFetch<ApiResponse<DashboardAlertsResponse>>('/api/ai/dashboard-alerts');
-    return response.data;
+  return response.data;
   } catch (err) {
     // Nếu BE chưa có endpoint /api/ai-alerts hoặc trả 404 thì trả về rỗng để tránh crash UI
     const message = err instanceof Error ? err.message : '';
