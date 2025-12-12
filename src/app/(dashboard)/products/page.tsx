@@ -29,6 +29,8 @@ import type { StockByStore } from '@/services/stock.service';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 import { TableSkeleton } from '@/components/common/TableSkeleton';
 
 type SortKey = 'name' | 'code' | 'unitPrice';
@@ -36,6 +38,7 @@ type SortDirection = 'asc' | 'desc';
 
 export default function ProductsPage() {
   const router = useRouter();
+  const { confirm } = useConfirm();
 
   const [data, setData] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -214,21 +217,27 @@ export default function ProductsPage() {
     mutationFn: (id: number) => deleteProduct(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['products'] });
+      showToast.success('Xóa hàng hóa thành công');
     },
     onError: (err: unknown) => {
       const message =
         err instanceof Error ? err.message : 'Xóa hàng hóa thất bại';
+      showToast.error(message);
       setError(message);
     },
   });
 
   const handleDelete = async (id: number, name: string) => {
-    const ok = window.confirm(
-      `Bạn có chắc chắn muốn xóa hàng hóa "${name}" không?`,
-    );
-    if (!ok) return;
-
-    deleteMutation.mutate(id);
+    confirm({
+      title: 'Xác nhận xóa',
+      message: `Bạn có chắc chắn muốn xóa hàng hóa "${name}" không?`,
+      variant: 'danger',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      onConfirm: () => {
+        deleteMutation.mutate(id);
+      },
+    });
   };
 
   // ===========================

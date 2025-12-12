@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "@/styles/animations.css";
+import AlertInterceptor from "@/components/AlertInterceptor";
 
 export const metadata: Metadata = {
   title: "Hệ thống quản lý kho hàng",
@@ -22,6 +24,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
+        <AlertInterceptor />
         {children}
       </body>
     </html>

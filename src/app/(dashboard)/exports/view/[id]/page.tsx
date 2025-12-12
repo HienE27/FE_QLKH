@@ -17,10 +17,13 @@ import { useExport } from '@/hooks/useExport';
 import { buildImageUrl, formatDateTimeWithSeconds } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 export default function ViewExportReceipt() {
     const params = useParams();
     const router = useRouter();
+    const { confirm } = useConfirm();
 
     const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
     const id = Number(rawId);
@@ -562,8 +565,7 @@ function StatusSidebar({ data }: { data: SupplierExport }) {
     const auditData = data as SupplierExportWithAudit;
     const { user } = useUser();
     const userRoles = user?.roles || [];
-    const isAdmin = hasRole(userRoles, ['ADMIN']);
-    const isManager = hasRole(userRoles, ['MANAGER']);
+    const { confirm } = useConfirm();
 
     const pickUser = (...values: Array<string | number | null | undefined>) => {
         for (const v of values) {
@@ -647,82 +649,110 @@ function StatusSidebar({ data }: { data: SupplierExport }) {
 
     const handleApprove = async () => {
         if (!canApprove) {
-            alert('Bạn không có quyền duyệt phiếu xuất');
+            showToast.error('Bạn không có quyền duyệt phiếu xuất');
             return;
         }
-        if (!confirm('Duyệt phiếu xuất này (chờ Admin xuất kho)?')) return;
-
-        try {
-            setProcessing(true);
-            const { approveExport } = await import('@/services/inventory.service');
-            await approveExport(data.id);
-            alert('Đã duyệt phiếu xuất, chờ Admin xuất kho.');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi duyệt phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận duyệt',
+            message: 'Duyệt phiếu xuất này (chờ Admin xuất kho)?',
+            variant: 'info',
+            confirmText: 'Duyệt',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { approveExport } = await import('@/services/inventory.service');
+                    await approveExport(data.id);
+                    showToast.success('Đã duyệt phiếu xuất, chờ Admin xuất kho.');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi duyệt phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleConfirm = async () => {
         if (!canConfirm) {
-            alert('Chỉ Admin mới có quyền xuất kho bước cuối');
+            showToast.error('Chỉ Admin mới có quyền xuất kho bước cuối');
             return;
         }
-        if (!confirm('Xác nhận xuất kho và cập nhật tồn kho?')) return;
-
-        try {
-            setProcessing(true);
-            const { confirmExport } = await import('@/services/inventory.service');
-            await confirmExport(data.id);
-            alert('Đã xuất kho thành công!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi xuất kho');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận xuất kho',
+            message: 'Xác nhận xuất kho và cập nhật tồn kho?',
+            variant: 'info',
+            confirmText: 'Xác nhận',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { confirmExport } = await import('@/services/inventory.service');
+                    await confirmExport(data.id);
+                    showToast.success('Đã xuất kho thành công!');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi xuất kho');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleReject = async () => {
         if (!canReject) {
-            alert('Bạn không có quyền từ chối phiếu xuất');
+            showToast.error('Bạn không có quyền từ chối phiếu xuất');
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn từ chối phiếu xuất này?')) return;
-
-        try {
-            setProcessing(true);
-            const { rejectExport } = await import('@/services/inventory.service');
-            await rejectExport(data.id);
-            alert('Đã từ chối phiếu xuất!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi từ chối phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận từ chối',
+            message: 'Bạn chắc chắn muốn từ chối phiếu xuất này?',
+            variant: 'warning',
+            confirmText: 'Từ chối',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { rejectExport } = await import('@/services/inventory.service');
+                    await rejectExport(data.id);
+                    showToast.success('Đã từ chối phiếu xuất!');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi từ chối phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleCancel = async () => {
         if (!canCancel) {
-            alert('Bạn không có quyền hủy phiếu xuất');
+            showToast.error('Bạn không có quyền hủy phiếu xuất');
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn hủy / xoá phiếu xuất này?')) return;
-
-        try {
-            setProcessing(true);
-            const { cancelExport } = await import('@/services/inventory.service');
-            await cancelExport(data.id);
-            alert('Đã hủy phiếu xuất!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi hủy phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận hủy',
+            message: 'Bạn chắc chắn muốn hủy / xoá phiếu xuất này?',
+            variant: 'danger',
+            confirmText: 'Hủy',
+            cancelText: 'Không',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { cancelExport } = await import('@/services/inventory.service');
+                    await cancelExport(data.id);
+                    showToast.success('Đã hủy phiếu xuất!');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi hủy phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const isPending = data.status === 'PENDING';

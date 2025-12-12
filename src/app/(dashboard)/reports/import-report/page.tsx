@@ -7,6 +7,7 @@ import { PAGE_SIZE } from '@/constants/pagination';
 import { ensureVnFont } from '@/lib/pdf';
 import { usePagination } from '@/hooks/usePagination';
 import { useDebounce } from '@/hooks/useDebounce';
+import { showToast } from '@/lib/toast';
 import {
     searchImportsPaged,
     type SupplierImport,
@@ -327,7 +328,7 @@ export default function ImportReportPage() {
             await new Promise(resolve => setTimeout(resolve, 100));
             dataToExport = allDataForExport;
             if (dataToExport.length === 0) {
-                alert('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
+                showToast.error('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
                 return;
             }
         }
@@ -353,7 +354,7 @@ export default function ImportReportPage() {
             XLSX.writeFile(workbook, `bao-cao-phieu-nhap-${date}.xlsx`);
         } catch (err) {
             console.error('Export excel error', err);
-            alert('Xuất Excel thất bại.');
+            showToast.error('Xuất Excel thất bại.');
         }
     };
 
@@ -366,7 +367,7 @@ export default function ImportReportPage() {
             await new Promise(resolve => setTimeout(resolve, 100));
             dataToExport = allDataForExport;
             if (dataToExport.length === 0) {
-                alert('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
+                showToast.error('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
             return;
             }
         }
@@ -411,7 +412,7 @@ export default function ImportReportPage() {
             doc.save(`bao-cao-phieu-nhap-${date}.pdf`);
         } catch (err) {
             console.error('Export PDF error', err);
-            alert('Xuất PDF thất bại.');
+            showToast.error('Xuất PDF thất bại.');
         }
     };
 

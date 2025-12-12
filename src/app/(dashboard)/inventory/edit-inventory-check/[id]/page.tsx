@@ -34,11 +34,9 @@ interface CheckItem {
 function InfoRow({
     label,
     children,
-    multi = false,
 }: {
     label: string;
     children: React.ReactNode;
-    multi?: boolean;
 }) {
     return (
         <div className="flex items-start gap-3">
@@ -544,7 +542,7 @@ export default function EditInventoryCheckPage() {
                                             />
                                         </InfoRow>
 
-                                        <InfoRow label="Mô tả" multi>
+                                        <InfoRow label="Mô tả">
                                             <textarea
                                                 className="w-full px-3 py-1.5 border border-black rounded h-14 resize-none"
                                                 value={description}
@@ -553,7 +551,7 @@ export default function EditInventoryCheckPage() {
                                             />
                                         </InfoRow>
 
-                                        <InfoRow label="Ghi chú" multi>
+                                        <InfoRow label="Ghi chú">
                                             <textarea
                                                 className="w-full px-3 py-1.5 border border-black rounded h-14 resize-none"
                                                 value={note}

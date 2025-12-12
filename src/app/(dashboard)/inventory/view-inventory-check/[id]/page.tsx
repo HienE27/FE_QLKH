@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -15,14 +14,17 @@ import {
 import { useInventoryCheck } from '@/hooks/useInventoryCheck';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 import { getProduct } from '@/services/product.service';
 
-import { formatPrice, formatDateTime, formatDateTimeWithSeconds } from '@/lib/utils';
+import { formatPrice, formatDateTimeWithSeconds } from '@/lib/utils';
 
 export default function ViewInventoryCheckPage() {
     const params = useParams();
     const router = useRouter();
+    const { confirm } = useConfirm();
 
     const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
     const id = Number(rawId);
@@ -112,7 +114,7 @@ export default function ViewInventoryCheckPage() {
 
     return (
         <>
-                <div className="mb-12">
+            <div className="mb-12">
                     <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Chi tiết phiếu kiểm kê</h1>
                     <p className="text-sm text-blue-gray-600 uppercase">Xem chi tiết phiếu kiểm kê kho hàng</p>
                 </div>
@@ -259,23 +261,24 @@ function InfoRow({ label, value, multi = false }: InfoRowProps) {
     );
 }
 
-function getStatusText(status: string): string {
-    const statusMap: Record<string, string> = {
-        'PENDING': 'Chờ duyệt',
-        'APPROVED': 'Đã duyệt',
-        'REJECTED': 'Từ chối',
-    };
-    return statusMap[status] || status;
-}
+// Unused functions - commented out
+// function getStatusText(status: string): string {
+//     const statusMap: Record<string, string> = {
+//         'PENDING': 'Chờ duyệt',
+//         'APPROVED': 'Đã duyệt',
+//         'REJECTED': 'Từ chối',
+//     };
+//     return statusMap[status] || status;
+// }
 
-function getStatusColor(status: string): string {
-    const colorMap: Record<string, string> = {
-        'PENDING': 'bg-yellow-500 text-black',
-        'APPROVED': 'bg-amber-500 text-black',
-        'REJECTED': 'bg-red-500 text-black',
-    };
-    return colorMap[status] || 'bg-blue-gray-100 text-blue-gray-800';
-}
+// function getStatusColor(status: string): string {
+//     const colorMap: Record<string, string> = {
+//         'PENDING': 'bg-yellow-500 text-black',
+//         'APPROVED': 'bg-amber-500 text-black',
+//         'REJECTED': 'bg-red-500 text-black',
+//     };
+//     return colorMap[status] || 'bg-blue-gray-100 text-blue-gray-800';
+// }
 
 // Extended type for InventoryCheck with optional audit fields
 type InventoryCheckWithAudit = InventoryCheck & {
@@ -306,6 +309,7 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
     const auditData = data as InventoryCheckWithAudit;
     const { user } = useUser();
     const userRoles = user?.roles || [];
+    const { confirm } = useConfirm();
 
     const pickUser = (...values: Array<string | number | null | undefined>) => {
         for (const v of values) {
@@ -388,80 +392,108 @@ function StatusSidebar({ data }: { data: InventoryCheck }) {
 
     const handleApprove = async () => {
         if (!canApprove) {
-            alert('Bạn không có quyền duyệt phiếu kiểm kê');
+            showToast.error('Bạn không có quyền duyệt phiếu kiểm kê');
             return;
         }
-        if (!confirm('Duyệt phiếu kiểm kê này (chờ Admin xác nhận)?')) return;
-
-        try {
-            setProcessing(true);
-            await approveInventoryCheck(data.id);
-            alert('Đã duyệt phiếu kiểm kê, chờ Admin xác nhận cuối cùng.');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi duyệt phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận duyệt',
+            message: 'Duyệt phiếu kiểm kê này (chờ Admin xác nhận)?',
+            variant: 'info',
+            confirmText: 'Duyệt',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    await approveInventoryCheck(data.id);
+                    showToast.success('Đã duyệt phiếu kiểm kê, chờ Admin xác nhận cuối cùng.');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi duyệt phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleConfirm = async () => {
         if (!canConfirm) {
-            alert('Chỉ Admin mới có quyền xác nhận cuối cùng');
+            showToast.error('Chỉ Admin mới có quyền xác nhận cuối cùng');
             return;
         }
-        if (!confirm('Xác nhận phiếu kiểm kê và cập nhật tồn kho?')) return;
-
-        try {
-            setProcessing(true);
-            await confirmInventoryCheck(data.id);
-            alert('Đã xác nhận phiếu kiểm kê thành công!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi xác nhận phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận phiếu kiểm kê',
+            message: 'Xác nhận phiếu kiểm kê và cập nhật tồn kho?',
+            variant: 'info',
+            confirmText: 'Xác nhận',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    await confirmInventoryCheck(data.id);
+                    showToast.success('Đã xác nhận phiếu kiểm kê thành công!');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi xác nhận phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleReject = async () => {
         if (!canReject) {
-            alert('Bạn không có quyền từ chối phiếu kiểm kê');
+            showToast.error('Bạn không có quyền từ chối phiếu kiểm kê');
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn từ chối phiếu kiểm kê này?')) return;
-
-        try {
-            setProcessing(true);
-            await rejectInventoryCheck(data.id, { reason: rejectReason });
-            alert('Đã từ chối phiếu kiểm kê!');
-            setShowRejectModal(false);
-            setRejectReason('');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi từ chối phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận từ chối',
+            message: 'Bạn chắc chắn muốn từ chối phiếu kiểm kê này?',
+            variant: 'warning',
+            confirmText: 'Từ chối',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    await rejectInventoryCheck(data.id, { reason: rejectReason });
+                    showToast.success('Đã từ chối phiếu kiểm kê!');
+                    setShowRejectModal(false);
+                    setRejectReason('');
+                    window.location.reload();
+                } catch (err) {
+                    showToast.error(err || 'Lỗi từ chối phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleDelete = async () => {
         if (!canDelete) {
-            alert('Bạn không có quyền xóa phiếu kiểm kê');
+            showToast.error('Bạn không có quyền xóa phiếu kiểm kê');
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn xóa phiếu kiểm kê này?')) return;
-
-        try {
-            setProcessing(true);
-            await deleteInventoryCheck(data.id);
-            alert('Đã xóa phiếu kiểm kê!');
-            router.push('/inventory/inventory-checks');
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi xóa phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận xóa',
+            message: 'Bạn chắc chắn muốn xóa phiếu kiểm kê này?',
+            variant: 'danger',
+            confirmText: 'Xóa',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    await deleteInventoryCheck(data.id);
+                    showToast.success('Đã xóa phiếu kiểm kê!');
+                    router.push('/inventory/inventory-checks');
+                } catch (err) {
+                    showToast.error(err || 'Lỗi xóa phiếu');
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const isPending = data.status === 'PENDING';

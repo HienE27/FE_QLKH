@@ -3,17 +3,20 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import FilterSection from '@/components/common/FilterSection';
-import DataTable from '@/components/common/DataTable';
+import VirtualTable from '@/components/common/VirtualTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 import { deleteCategory, searchCategories } from '@/services/category.service';
 import type { Category } from '@/types/category';
 
 export default function CategoryManagementPage() {
   const router = useRouter();
+  const { confirm } = useConfirm();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,20 +95,28 @@ export default function CategoryManagementPage() {
   });
 
   const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm('Bạn có chắc muốn xóa danh mục này?');
-    if (!confirmDelete) return;
-
-    try {
-      setDeletingId(id);
-      await deleteCategory(id);
-      await loadCategories(currentPage);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Xóa danh mục thất bại';
-      setError(message);
-    } finally {
-      setDeletingId(null);
-    }
+    confirm({
+      title: 'Xác nhận xóa',
+      message: 'Bạn có chắc chắn muốn xóa danh mục này?',
+      variant: 'danger',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      onConfirm: async () => {
+        try {
+          setDeletingId(id);
+          await deleteCategory(id);
+          showToast.success('Xóa danh mục thành công');
+          await loadCategories(currentPage);
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Xóa danh mục thất bại';
+          showToast.error(message);
+          setError(message);
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
   const handleSearch = () => {
@@ -191,7 +202,7 @@ export default function CategoryManagementPage() {
 
           {/* Table */}
           <div className="px-6 pb-6">
-            <DataTable<Category>
+            <VirtualTable<Category>
               columns={[
                 { key: 'stt', label: 'STT', align: 'left' },
                 { key: 'name', label: 'Tên danh mục', align: 'left' },
@@ -203,6 +214,8 @@ export default function CategoryManagementPage() {
               loading={loading}
               emptyMessage="Không có danh mục nào phù hợp"
               startIndex={(currentPage - 1) * PAGE_SIZE}
+              rowHeight={48}
+              viewportHeight={560}
               renderRow={(cat, index) => (
                 <>
                   <td className="px-4 text-sm text-blue-gray-800">{(currentPage - 1) * PAGE_SIZE + index + 1}</td>

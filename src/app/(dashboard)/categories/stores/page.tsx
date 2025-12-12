@@ -3,18 +3,21 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import FilterSection from '@/components/common/FilterSection';
-import DataTable from '@/components/common/DataTable';
+import VirtualTable from '@/components/common/VirtualTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 import { deleteStore, searchStores } from '@/services/store.service';
 import type { Store } from '@/services/store.service';
 
 export default function StoreManagementPage() {
     const router = useRouter();
+    const { confirm } = useConfirm();
     const [stores, setStores] = useState<Store[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -96,20 +99,28 @@ export default function StoreManagementPage() {
     });
 
     const handleDelete = async (id: number) => {
-        const confirmDelete = window.confirm('Bạn có chắc muốn xóa kho hàng này?');
-        if (!confirmDelete) return;
-
-        try {
-            setDeletingId(id);
-            await deleteStore(id);
-            await loadStores(currentPage);
-        } catch (err) {
-            const message =
-                err instanceof Error ? err.message : 'Xóa kho hàng thất bại';
-            setError(message);
-        } finally {
-            setDeletingId(null);
-        }
+        confirm({
+            title: 'Xác nhận xóa',
+            message: 'Bạn có chắc chắn muốn xóa kho hàng này?',
+            variant: 'danger',
+            confirmText: 'Xóa',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setDeletingId(id);
+                    await deleteStore(id);
+                    showToast.success('Xóa kho hàng thành công');
+                    await loadStores(currentPage);
+                } catch (err) {
+                    const message =
+                        err instanceof Error ? err.message : 'Xóa kho hàng thất bại';
+                    showToast.error(message);
+                    setError(message);
+                } finally {
+                    setDeletingId(null);
+                }
+            },
+        });
     };
 
     const handleSearch = () => {
@@ -196,7 +207,7 @@ export default function StoreManagementPage() {
 
                     {/* Table */}
                     <div className="px-6 pb-6">
-                        <DataTable
+                        <VirtualTable
                 columns={[
                     { key: 'stt', label: 'STT', align: 'left' },
                     { key: 'code', label: 'Mã kho', align: 'left' },
@@ -208,6 +219,8 @@ export default function StoreManagementPage() {
                 loading={loading}
                 emptyMessage="Không có kho hàng nào phù hợp"
                 startIndex={(currentPage - 1) * PAGE_SIZE}
+                rowHeight={48}
+                viewportHeight={560}
                 renderRow={(store, index) => (
                     <>
                         <td className="px-4 text-sm text-blue-gray-800">

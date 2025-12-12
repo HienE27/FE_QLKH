@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import {
@@ -17,10 +17,13 @@ import { useAllStocks } from '@/hooks/useAllStocks';
 import { buildImageUrl, formatDateTimeWithSeconds } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 export default function ViewImportReceipt() {
     const params = useParams();
     const router = useRouter();
+    const { confirm } = useConfirm();
 
     const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
     const id = Number(rawId);
@@ -507,7 +510,7 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
     // });
     const { user } = useUser();
     const userRoles = user?.roles || [];
-    const isAdmin = hasRole(userRoles, ['ADMIN']);
+    const { confirm } = useConfirm();
 
     const pickUser = (...values: Array<string | number | null | undefined>) => {
         for (const v of values) {
@@ -607,82 +610,118 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
 
     const handleApprove = async () => {
         if (!canApprove) {
-            alert('Bạn không có quyền duyệt phiếu nhập');
+            showToast.error('Bạn không có quyền duyệt phiếu nhập');
             return;
         }
-        if (!confirm('Duyệt phiếu nhập này (chờ nhập kho)?')) return;
-
-        try {
-            setProcessing(true);
-            const { approveImport } = await import('@/services/inventory.service');
-            await approveImport(data.id);
-            alert('Đã duyệt phiếu nhập, chờ Admin nhập kho.');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi duyệt phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận duyệt',
+            message: 'Duyệt phiếu nhập này (chờ nhập kho)?',
+            variant: 'info',
+            confirmText: 'Duyệt',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { approveImport } = await import('@/services/inventory.service');
+                    await approveImport(data.id);
+                    showToast.success('Đã duyệt phiếu nhập, chờ Admin nhập kho.');
+                    window.location.reload();
+                } catch (err: unknown) {
+                    console.error('Approve import error:', err);
+                    const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Lỗi duyệt phiếu';
+                    showToast.error(errorMessage);
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleConfirm = async () => {
         if (!canConfirm) {
-            alert('Chỉ Admin mới có quyền nhập kho bước cuối');
+            showToast.error('Chỉ Admin mới có quyền nhập kho bước cuối');
             return;
         }
-        if (!confirm('Xác nhận nhập kho và cập nhật tồn kho?')) return;
-
-        try {
-            setProcessing(true);
-            const { confirmImport } = await import('@/services/inventory.service');
-            await confirmImport(data.id);
-            alert('Đã nhập kho thành công!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi nhập kho');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận nhập kho',
+            message: 'Xác nhận nhập kho và cập nhật tồn kho?',
+            variant: 'info',
+            confirmText: 'Xác nhận',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { confirmImport } = await import('@/services/inventory.service');
+                    await confirmImport(data.id);
+                    showToast.success('Đã nhập kho thành công!');
+                    window.location.reload();
+                } catch (err: unknown) {
+                    console.error('Confirm import error:', err);
+                    const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Lỗi nhập kho';
+                    showToast.error(errorMessage);
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleReject = async () => {
         if (!canReject) {
-            alert('Bạn không có quyền từ chối phiếu nhập');
+            showToast.error('Bạn không có quyền từ chối phiếu nhập');
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn từ chối phiếu nhập này?')) return;
-
-        try {
-            setProcessing(true);
-            const { rejectImport } = await import('@/services/inventory.service');
-            await rejectImport(data.id);
-            alert('Đã từ chối phiếu nhập!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi từ chối phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận từ chối',
+            message: 'Bạn chắc chắn muốn từ chối phiếu nhập này?',
+            variant: 'warning',
+            confirmText: 'Từ chối',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { rejectImport } = await import('@/services/inventory.service');
+                    await rejectImport(data.id);
+                    showToast.success('Đã từ chối phiếu nhập!');
+                    window.location.reload();
+                } catch (err: unknown) {
+                    console.error('Reject import error:', err);
+                    const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Lỗi từ chối phiếu';
+                    showToast.error(errorMessage);
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const handleCancel = async () => {
         if (!canCancel) {
-            alert('Bạn không có quyền hủy phiếu nhập');
+            showToast.error('Bạn không có quyền hủy phiếu nhập');
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn hủy / xoá phiếu nhập này?')) return;
-
-        try {
-            setProcessing(true);
-            const { cancelImport } = await import('@/services/inventory.service');
-            await cancelImport(data.id);
-            alert('Đã hủy phiếu nhập!');
-            window.location.reload();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Lỗi hủy phiếu');
-        } finally {
-            setProcessing(false);
-        }
+        confirm({
+            title: 'Xác nhận hủy',
+            message: 'Bạn chắc chắn muốn hủy / xoá phiếu nhập này?',
+            variant: 'danger',
+            confirmText: 'Hủy',
+            cancelText: 'Không',
+            onConfirm: async () => {
+                try {
+                    setProcessing(true);
+                    const { cancelImport } = await import('@/services/inventory.service');
+                    await cancelImport(data.id);
+                    showToast.success('Đã hủy phiếu nhập!');
+                    window.location.reload();
+                } catch (err: unknown) {
+                    console.error('Cancel import error:', err);
+                    const errorMessage = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Lỗi hủy phiếu';
+                    showToast.error(errorMessage);
+                } finally {
+                    setProcessing(false);
+                }
+            },
+        });
     };
 
     const isPending = data.status === 'PENDING';

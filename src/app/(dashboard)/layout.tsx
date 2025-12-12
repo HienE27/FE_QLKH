@@ -5,7 +5,10 @@ import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import Sidebar from '@/components/layout/Sidebar';
+import MobileMenu from '@/components/layout/MobileMenu';
 import { QueryClientProvider } from '@/providers/QueryClientProvider';
+import { ConfirmProvider } from '@/hooks/useConfirm';
+
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { loading } = useAuth();
@@ -49,8 +52,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <QueryClientProvider>
       <div className="min-h-screen bg-blue-gray-50/50">
         <Sidebar />
-        <main className="p-4 xl:ml-80">
-          {children}
+        <MobileMenu />
+        <main className="p-4 xl:ml-80 pt-16 xl:pt-4">
+          <ConfirmProvider>
+            {children}
+          </ConfirmProvider>
         </main>
       </div>
     </QueryClientProvider>

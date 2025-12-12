@@ -31,6 +31,7 @@ import { aiProductDescription } from '@/services/ai.service';
 
 import { buildImageUrl, parseMoney } from '@/lib/utils';
 import RichTextEditor from '@/components/editor/RichTextEditor';
+import { showToast } from '@/lib/toast';
 
 export default function EditProductPage() {
   const router = useRouter();
@@ -724,7 +725,7 @@ function StockRow({
       onUpdate();
     } catch (err) {
       console.error('Failed to update minStock:', err);
-      alert('Không thể cập nhật tồn kho tối thiểu');
+      showToast.error('Không thể cập nhật tồn kho tối thiểu');
     } finally {
       setSaving(false);
     }
@@ -744,7 +745,7 @@ function StockRow({
       onUpdate();
     } catch (err) {
       console.error('Failed to update maxStock:', err);
-      alert('Không thể cập nhật tồn kho tối đa');
+      showToast.error('Không thể cập nhật tồn kho tối đa');
     } finally {
       setSaving(false);
     }

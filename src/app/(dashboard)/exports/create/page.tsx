@@ -34,6 +34,8 @@ import { createCustomer, type Customer } from '@/services/customer.service';
 import { ocrReceipt } from '@/services/ai.service';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 interface ProductItem {
     id: number;
@@ -74,6 +76,7 @@ function InfoRow({
 export default function TaoPhieuXuatKho() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
+    const { confirm } = useConfirm();
     const userRoles = user?.roles || [];
 
     // Kiểm tra quyền
@@ -82,7 +85,7 @@ export default function TaoPhieuXuatKho() {
     // Redirect nếu không có quyền
     useEffect(() => {
         if (!userLoading && !canCreate) {
-            alert('Bạn không có quyền tạo phiếu xuất kho');
+            showToast.error('Bạn không có quyền tạo phiếu xuất kho');
             router.push('/exports');
         }
     }, [userLoading, canCreate, router]);
@@ -1335,9 +1338,17 @@ export default function TaoPhieuXuatKho() {
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            if (window.confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" khỏi phiếu xuất này không?`)) {
-                                                                deleteProduct(product.id);
-                                                            }
+                                                            confirm({
+                                                                title: 'Xác nhận xóa',
+                                                                message: `Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" khỏi phiếu xuất này không?`,
+                                                                variant: 'danger',
+                                                                confirmText: 'Xóa',
+                                                                cancelText: 'Hủy',
+                                                                onConfirm: () => {
+                                                                    deleteProduct(product.id);
+                                                                    showToast.success('Đã xóa sản phẩm khỏi phiếu xuất');
+                                                                },
+                                                            })
                                                         }}
                                                         className="text-red-600 hover:text-red-800 transition-colors duration-200 p-1 rounded hover:bg-red-50"
                                                         title="Xóa sản phẩm"

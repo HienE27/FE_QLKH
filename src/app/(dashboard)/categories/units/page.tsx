@@ -3,17 +3,20 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import FilterSection from '@/components/common/FilterSection';
-import DataTable from '@/components/common/DataTable';
+import VirtualTable from '@/components/common/VirtualTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 import { deleteUnit, searchUnits } from '@/services/unit.service';
 import type { Unit } from '@/types/unit';
 
 export default function UnitManagementPage() {
   const router = useRouter();
+  const { confirm } = useConfirm();
   const [units, setUnits] = useState<Unit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,20 +90,28 @@ export default function UnitManagementPage() {
   });
 
   const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm('Bạn có chắc muốn xóa đơn vị này?');
-    if (!confirmDelete) return;
-
-    try {
-      setDeletingId(id);
-      await deleteUnit(id);
-      await loadUnits(currentPage);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Xóa đơn vị thất bại';
-      setError(message);
-    } finally {
-      setDeletingId(null);
-    }
+    confirm({
+      title: 'Xác nhận xóa',
+      message: 'Bạn có chắc chắn muốn xóa đơn vị này?',
+      variant: 'danger',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      onConfirm: async () => {
+        try {
+          setDeletingId(id);
+          await deleteUnit(id);
+          showToast.success('Xóa đơn vị thành công');
+          await loadUnits(currentPage);
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Xóa đơn vị thất bại';
+          showToast.error(message);
+          setError(message);
+        } finally {
+          setDeletingId(null);
+        }
+      },
+    });
   };
 
   const handleSearch = () => {
@@ -167,7 +178,7 @@ export default function UnitManagementPage() {
 
           {/* Table */}
           <div className="px-6 pb-6">
-            <DataTable
+            <VirtualTable
               columns={[
                 { key: 'stt', label: 'STT', align: 'left' },
                 { key: 'name', label: 'Tên đơn vị', align: 'left' },
@@ -179,6 +190,8 @@ export default function UnitManagementPage() {
               loading={loading}
               emptyMessage="Không có đơn vị nào phù hợp"
               startIndex={(currentPage - 1) * PAGE_SIZE}
+              rowHeight={48}
+              viewportHeight={560}
               renderRow={(unit: Unit, index: number) => (
                 <>
                   <td className="px-4 text-sm text-blue-gray-800">{(currentPage - 1) * PAGE_SIZE + index + 1}</td>

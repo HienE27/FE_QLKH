@@ -13,6 +13,7 @@ import { getStores, type Store } from '@/services/store.service';
 import { getStockByStore, type StockByStore } from '@/services/stock.service';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { showToast } from '@/lib/toast';
 import { formatPrice, parseNumber } from '@/lib/utils';
 
 interface CheckItem {
@@ -34,11 +35,9 @@ interface CheckItem {
 function InfoRow({
     label,
     children,
-    multi = false,
 }: {
     label: string;
     children: React.ReactNode;
-    multi?: boolean;
 }) {
     return (
         <div className="flex items-start gap-3">
@@ -59,7 +58,7 @@ export default function CreateInventoryCheckPage() {
     // Redirect nếu không có quyền
     useEffect(() => {
         if (!userLoading && !canCreate) {
-            alert('Bạn không có quyền tạo phiếu kiểm kê');
+            showToast.error('Bạn không có quyền tạo phiếu kiểm kê');
             router.push('/inventory/inventory-checks');
         }
     }, [userLoading, canCreate, router]);
@@ -483,7 +482,7 @@ export default function CreateInventoryCheckPage() {
                                     />
                                 </InfoRow>
 
-                                <InfoRow label="Mô tả" multi>
+                                <InfoRow label="Mô tả">
                                     <textarea
                                         className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg h-14 resize-none bg-blue-gray-50 text-blue-gray-800 placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                         value={description}
@@ -492,7 +491,7 @@ export default function CreateInventoryCheckPage() {
                                     />
                                 </InfoRow>
 
-                                <InfoRow label="Ghi chú" multi>
+                                <InfoRow label="Ghi chú">
                                     <textarea
                                         className="w-full px-3 py-1.5 border border-blue-gray-300 rounded-lg h-14 resize-none bg-blue-gray-50 text-blue-gray-800 placeholder:text-blue-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0099FF] focus:border-[#0099FF]"
                                         value={note}

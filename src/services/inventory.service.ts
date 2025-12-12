@@ -538,16 +538,40 @@ export async function confirmImport(id: number): Promise<SupplierImport> {
     if (!res.ok) {
         let msg = "Không xác nhận được phiếu nhập";
         try {
-            const j = (await res.json()) as { message?: string };
-            if (j.message) msg = j.message;
+            const errorText = await res.text();
+            if (errorText) {
+                try {
+                    const j = JSON.parse(errorText) as { message?: string; error?: string; data?: unknown };
+                    if (typeof j.message === 'string') {
+                        msg = j.message;
+                    } else if (typeof j.error === 'string') {
+                        msg = j.error;
+                    }
+                } catch {
+                    // If not JSON, use the text as message
+                    if (errorText.length < 200) {
+                        msg = errorText;
+                    }
+                }
+            }
         } catch {
             // ignore
         }
         throw new Error(msg);
     }
 
-    const json: ApiResponse<SupplierImport> = await res.json();
-    return json.data;
+    try {
+        const json: ApiResponse<SupplierImport> = await res.json();
+        if (!json.data) {
+            throw new Error('Response không có dữ liệu');
+        }
+        return json.data;
+    } catch (err) {
+        if (err instanceof Error) {
+            throw err;
+        }
+        throw new Error('Không thể parse response từ server');
+    }
 }
 
 /* Duyệt phiếu nhập (PENDING -> APPROVED) */
@@ -567,8 +591,14 @@ export async function approveImport(id: number): Promise<SupplierImport> {
     if (!res.ok) {
         let msg = "Không duyệt được phiếu nhập";
         try {
-            const j = (await res.json()) as { message?: string };
-            if (j.message) msg = j.message;
+            const j = (await res.json()) as { message?: string; error?: string; data?: unknown };
+            if (typeof j.message === 'string') {
+                msg = j.message;
+            } else if (typeof j.error === 'string') {
+                msg = j.error;
+            } else if (typeof j === 'string') {
+                msg = j;
+            }
         } catch {
             // ignore
         }
@@ -654,8 +684,14 @@ export async function cancelImport(id: number): Promise<SupplierImport> {
     if (!res.ok) {
         let msg = "Không hủy được phiếu nhập";
         try {
-            const j = (await res.json()) as { message?: string };
-            if (j.message) msg = j.message;
+            const j = (await res.json()) as { message?: string; error?: string; data?: unknown };
+            if (typeof j.message === 'string') {
+                msg = j.message;
+            } else if (typeof j.error === 'string') {
+                msg = j.error;
+            } else if (typeof j === 'string') {
+                msg = j;
+            }
         } catch {
             // ignore
         }
@@ -683,8 +719,14 @@ export async function rejectImport(id: number): Promise<SupplierImport> {
     if (!res.ok) {
         let msg = "Không từ chối được phiếu nhập";
         try {
-            const j = (await res.json()) as { message?: string };
-            if (j.message) msg = j.message;
+            const j = (await res.json()) as { message?: string; error?: string; data?: unknown };
+            if (typeof j.message === 'string') {
+                msg = j.message;
+            } else if (typeof j.error === 'string') {
+                msg = j.error;
+            } else if (typeof j === 'string') {
+                msg = j;
+            }
         } catch {
             // ignore
         }

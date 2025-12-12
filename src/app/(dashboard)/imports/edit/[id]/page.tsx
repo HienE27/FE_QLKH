@@ -24,6 +24,8 @@ import { useAllStocks } from '@/hooks/useAllStocks';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { useStores } from '@/hooks/useStores';
 import { useProducts } from '@/hooks/useProducts';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 import type { Product as BaseProduct } from '@/types/product';
 
@@ -100,6 +102,7 @@ function InfoLine({ label, value, multi, children, isTextArea = false }: InfoLin
 export default function EditImportReceiptPage() {
     const router = useRouter();
     const params = useParams();
+    const { confirm } = useConfirm();
     const importId = Number(
         Array.isArray(params?.id) ? params.id[0] : params?.id,
     );
@@ -979,9 +982,17 @@ export default function EditImportReceiptPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                if (window.confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${row.name}" khỏi danh sách?`)) {
-                                                                    deleteRow(row.rowId);
-                                                                }
+                                                                confirm({
+                                                                    title: 'Xác nhận xóa',
+                                                                    message: `Bạn có chắc chắn muốn xóa sản phẩm "${row.name}" khỏi danh sách?`,
+                                                                    variant: 'danger',
+                                                                    confirmText: 'Xóa',
+                                                                    cancelText: 'Hủy',
+                                                                    onConfirm: () => {
+                                                                        deleteRow(row.rowId);
+                                                                        showToast.success('Đã xóa sản phẩm khỏi danh sách');
+                                                                    },
+                                                                })
                                                             }}
                                                             className="text-red-600 hover:text-red-800 transition-colors duration-200 p-1 rounded hover:bg-red-50"
                                                             title="Xóa sản phẩm"

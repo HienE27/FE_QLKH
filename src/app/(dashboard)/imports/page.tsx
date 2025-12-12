@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import FilterSection from '@/components/common/FilterSection';
-import DataTable from '@/components/common/DataTable';
+import VirtualTable from '@/components/common/VirtualTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -14,6 +14,7 @@ import { formatPrice, formatDateTime } from '@/lib/utils';
 import Pagination from '@/components/common/Pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useDebounce } from '@/hooks/useDebounce';
+import { showToast } from '@/lib/toast';
 
 const statusConfig: Record<ExportStatus, { label: string; color: string }> = {
     PENDING: { label: 'Chờ duyệt', color: 'bg-yellow-500' },
@@ -89,7 +90,7 @@ export default function ImportsPage() {
 
     const handleDelete = async (id: number, code: string) => {
         // TODO: Implement delete import functionality when API is available
-        alert('Chức năng xóa phiếu nhập đang được phát triển');
+        showToast.info('Chức năng xóa phiếu nhập đang được phát triển');
     };
 
     // Pagination calculations (từ BE)
@@ -211,7 +212,7 @@ export default function ImportsPage() {
 
                 {/* Table */}
                 <div className="px-6 pb-6">
-                    <DataTable
+                    <VirtualTable
                         columns={[
                             { key: 'stt', label: 'STT', align: 'center' },
                             { key: 'code', label: 'Mã phiếu', align: 'center' },
@@ -225,6 +226,8 @@ export default function ImportsPage() {
                         loading={loading}
                         emptyMessage="Không có phiếu nhập nào"
                         startIndex={startIndex}
+                        rowHeight={48}
+                        viewportHeight={560}
                         renderRow={(record, index) => {
                             const importReceipt = record as unknown as SupplierImport;
                             return (

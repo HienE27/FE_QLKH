@@ -5,6 +5,7 @@ import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { ensureVnFont } from '@/lib/pdf';
+import { showToast } from '@/lib/toast';
 import { getProducts } from '@/services/product.service';
 import { getOrders } from '@/services/order.service';
 import { aiInventoryForecast } from '@/services/ai.service';
@@ -338,7 +339,7 @@ export default function InventoryReportPage() {
     const handleExportExcel = async () => {
         try {
             if (!filteredData.length) {
-                alert('Không có dữ liệu để xuất.');
+                showToast.error('Không có dữ liệu để xuất.');
                 return;
             }
             const XLSX = await import('xlsx');
@@ -350,14 +351,14 @@ export default function InventoryReportPage() {
             XLSX.writeFile(workbook, `bao-cao-ton-kho-${date}.xlsx`);
         } catch (err) {
             console.error('Export Excel failed', err);
-            alert('Xuất Excel thất bại, vui lòng thử lại.');
+            showToast.error('Xuất Excel thất bại, vui lòng thử lại.');
         }
     };
 
     const handleExportPDF = async () => {
         try {
             if (!filteredData.length) {
-                alert('Không có dữ liệu để xuất.');
+                showToast.error('Không có dữ liệu để xuất.');
                 return;
             }
             const { default: jsPDF } = await import('jspdf');
@@ -395,7 +396,7 @@ export default function InventoryReportPage() {
             doc.save(`bao-cao-ton-kho-${date}.pdf`);
         } catch (err) {
             console.error('Export PDF failed', err);
-            alert('Xuất PDF thất bại, vui lòng thử lại.');
+            showToast.error('Xuất PDF thất bại, vui lòng thử lại.');
         }
     };
 
@@ -678,7 +679,7 @@ export default function InventoryReportPage() {
                                         type="button"
                                         onClick={async () => {
                                             if (!filteredData.length) {
-                                                alert('Không có dữ liệu tồn kho để phân tích.');
+                                                showToast.error('Không có dữ liệu tồn kho để phân tích.');
                                                 return;
                                             }
                                             setAiLoading(true);
@@ -727,7 +728,7 @@ export default function InventoryReportPage() {
                                                 setAiSuggestion(data.recommendation);
                                             } catch (err) {
                                                 console.error('AI inventory forecast client error:', err);
-                                                alert(
+                                                showToast.error(
                                                     err instanceof Error
                                                         ? err.message
                                                         : 'Có lỗi khi gọi AI.',

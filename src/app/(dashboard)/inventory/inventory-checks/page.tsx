@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import FilterSection from '@/components/common/FilterSection';
-import DataTable from '@/components/common/DataTable';
+import VirtualTable from '@/components/common/VirtualTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -19,10 +19,13 @@ const statusConfig: Record<InventoryCheckStatus, { label: string; color: string 
 import { formatPrice, formatDateTime } from '@/lib/utils';
 import Pagination from '@/components/common/Pagination';
 import { usePagination } from '@/hooks/usePagination';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 export default function InventoryChecksPage() {
     const router = useRouter();
     const { user } = useUser();
+    const { confirm } = useConfirm();
     const userRoles = user?.roles || [];
 
     const [pageData, setPageData] = useState<PageResponse<InventoryCheck> | null>(null);
@@ -110,15 +113,22 @@ export default function InventoryChecksPage() {
     };
 
     const handleDelete = async (id: number, checkCode: string) => {
-        if (!confirm(`Bạn có chắc muốn xóa phiếu kiểm kê ${checkCode}?`)) return;
-
-        try {
-            await deleteInventoryCheck(id);
-            alert('Xóa phiếu kiểm kê thành công!');
-            loadChecks();
-        } catch (err) {
-            alert(err instanceof Error ? err.message : 'Không thể xóa phiếu kiểm kê');
-        }
+        confirm({
+            title: 'Xác nhận xóa',
+            message: `Bạn có chắc chắn muốn xóa phiếu kiểm kê ${checkCode}?`,
+            variant: 'danger',
+            confirmText: 'Xóa',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    await deleteInventoryCheck(id);
+                    showToast.success('Xóa phiếu kiểm kê thành công!');
+                    loadChecks();
+                } catch (err) {
+                    showToast.error(err || 'Không thể xóa phiếu kiểm kê');
+                }
+            },
+        });
     };
 
     // Pagination calculations (từ BE)
@@ -138,7 +148,7 @@ export default function InventoryChecksPage() {
 
     return (
         <>
-                <div className="mb-12">
+            <div className="mb-12">
                     <h1 className="text-2xl font-bold text-blue-gray-800 mb-1">Kiểm kê kho</h1>
                     <p className="text-sm text-blue-gray-600 uppercase">Quản lý kiểm kê kho</p>
                 </div>
@@ -224,7 +234,7 @@ export default function InventoryChecksPage() {
 
                     {/* Table */}
                     <div className="px-6 pb-6">
-                        <DataTable
+                        <VirtualTable
                             columns={[
                                 { key: 'stt', label: 'STT', align: 'center' },
                                 { key: 'code', label: 'Mã phiếu', align: 'center' },
@@ -238,6 +248,8 @@ export default function InventoryChecksPage() {
                             loading={loading}
                             emptyMessage="Không có phiếu kiểm kê nào"
                             startIndex={startIndex}
+                            rowHeight={48}
+                            viewportHeight={560}
                             renderRow={(record, index) => {
                                 const check = record as unknown as InventoryCheck;
                                 return (

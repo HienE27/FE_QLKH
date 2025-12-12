@@ -5,13 +5,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import FilterSection from '@/components/common/FilterSection';
-import DataTable from '@/components/common/DataTable';
+import VirtualTable from '@/components/common/VirtualTable';
 import ActionButtons from '@/components/common/ActionButtons';
 import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 import {
     searchCustomers,
     deleteCustomer,
@@ -20,6 +22,7 @@ import {
 
 export default function QuanLyKhachHang() {
     const router = useRouter();
+    const { confirm } = useConfirm();
 
     const [data, setData] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
@@ -113,17 +116,25 @@ export default function QuanLyKhachHang() {
     });
 
     const handleDelete = async (id: number, name: string) => {
-        const ok = window.confirm(`Xóa khách hàng "${name}"?`);
-        if (!ok) return;
-
-        try {
-            await deleteCustomer(id);
-            await loadData(currentPage); // Reload data sau khi xóa
-        } catch (e) {
-            const msg =
-                e instanceof Error ? e.message : 'Xóa khách hàng thất bại';
-            setError(msg);
-        }
+        confirm({
+            title: 'Xác nhận xóa',
+            message: `Bạn có chắc chắn muốn xóa khách hàng "${name}"?`,
+            variant: 'danger',
+            confirmText: 'Xóa',
+            cancelText: 'Hủy',
+            onConfirm: async () => {
+                try {
+                    await deleteCustomer(id);
+                    showToast.success('Xóa khách hàng thành công');
+                    await loadData(currentPage); // Reload data sau khi xóa
+                } catch (e) {
+                    const msg =
+                        e instanceof Error ? e.message : 'Xóa khách hàng thất bại';
+                    showToast.error(msg);
+                    setError(msg);
+                }
+            },
+        });
     };
 
     const handleSearch = () => {
@@ -233,7 +244,7 @@ export default function QuanLyKhachHang() {
 
                     {/* Table */}
                     <div className="px-6 pb-6">
-                        <DataTable
+                        <VirtualTable
                             columns={[
                                 { key: 'stt', label: 'STT', align: 'center' },
                                 { key: 'code', label: 'Mã khách hàng', align: 'center' },
@@ -246,6 +257,8 @@ export default function QuanLyKhachHang() {
                             loading={loading}
                             emptyMessage="Không có dữ liệu"
                             startIndex={(currentPage - 1) * PAGE_SIZE}
+                            rowHeight={48}
+                            viewportHeight={560}
                             renderRow={(item, index) => {
                                 const customer = item as unknown as Customer;
                                 const customerName = String(customer.name ?? customer.fullName ?? '');

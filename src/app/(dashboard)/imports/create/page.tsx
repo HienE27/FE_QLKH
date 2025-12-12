@@ -30,6 +30,8 @@ import { buildImageUrl, formatPrice, parseNumber } from '@/lib/utils';
 import { ocrReceipt } from '@/services/ai.service';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { useConfirm } from '@/hooks/useConfirm';
+import { showToast } from '@/lib/toast';
 
 interface ProductItem {
     id: number;
@@ -72,6 +74,7 @@ function InfoRow({
 export default function TaoPhieuNhapKho() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
+    const { confirm } = useConfirm();
     const userRoles = user?.roles || [];
 
     // Kiểm tra quyền
@@ -80,7 +83,7 @@ export default function TaoPhieuNhapKho() {
     // Redirect nếu không có quyền
     useEffect(() => {
         if (!userLoading && !canCreate) {
-            alert('Bạn không có quyền tạo phiếu nhập kho');
+            showToast.error('Bạn không có quyền tạo phiếu nhập kho');
             router.push('/imports');
         }
     }, [userLoading, canCreate, router]);
@@ -378,8 +381,18 @@ export default function TaoPhieuNhapKho() {
 
     const deleteProduct = (id: number) => {
         const product = products.find((p) => p.id === id);
-        if (product && window.confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" khỏi danh sách?`)) {
-            setProducts((prev) => prev.filter((p) => p.id !== id));
+        if (product) {
+            confirm({
+                title: 'Xác nhận xóa',
+                message: `Bạn có chắc chắn muốn xóa sản phẩm "${product.name}" khỏi danh sách?`,
+                variant: 'danger',
+                confirmText: 'Xóa',
+                cancelText: 'Hủy',
+                onConfirm: () => {
+                    setProducts((prev) => prev.filter((p) => p.id !== id));
+                    showToast.success('Đã xóa sản phẩm khỏi danh sách');
+                },
+            });
         }
     };
 
