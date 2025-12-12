@@ -10,27 +10,27 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import {
-    getStores,
-    type Store,
-} from '@/services/store.service';
 
 import {
     createExport,
-    getAllExports,
+    searchExportsPaged,
     type UnifiedExportCreateRequest,
     type SupplierExport,
 } from '@/services/inventory.service';
 
 import {
     getProducts,
+    searchProducts,
     uploadProductImage,
 } from '@/services/product.service';
 import type { Product } from '@/types/product';
+import { useDebounce } from '@/hooks/useDebounce';
 
-import { getAllStock } from '@/services/stock.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
+import { useStores } from '@/hooks/useStores';
+import { useCustomers } from '@/hooks/useCustomers';
 import { buildImageUrl, formatPrice, parseNumber } from '@/lib/utils';
-import { getCustomers, createCustomer, type Customer } from '@/services/customer.service';
+import { createCustomer, type Customer } from '@/services/customer.service';
 import { ocrReceipt } from '@/services/ai.service';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -87,8 +87,10 @@ export default function TaoPhieuXuatKho() {
         }
     }, [userLoading, canCreate, router]);
 
-    const [stores, setStores] = useState<Store[]>([]);
-    const [customers, setCustomers] = useState<Customer[]>([]);
+    // Load stores và customers với React Query cache
+    const { data: stores = [] } = useStores();
+    const { data: customers = [], isLoading: loadingCustomers } = useCustomers();
+
     const [customerMode, setCustomerMode] = useState<'select' | 'new'>('new'); // 'select' = chọn từ danh sách, 'new' = nhập mới
     const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
     const [customerName, setCustomerName] = useState(''); // Tên khách hàng (dùng cho cả 2 mode)
@@ -101,8 +103,6 @@ export default function TaoPhieuXuatKho() {
 
     const [reason, setReason] = useState('');
 
-    const [loadingCustomers, setLoadingCustomers] = useState(false);
-
     const [products, setProducts] = useState<ProductItem[]>([]);
 
     const [saving, setSaving] = useState(false);
@@ -113,9 +113,14 @@ export default function TaoPhieuXuatKho() {
     const [productList, setProductList] = useState<Product[]>([]);
     const [allStocksMap, setAllStocksMap] = useState<Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>>(new Map()); // Map productId -> Map<storeId, {quantity, maxStock, minStock}>
     const [productSearchTerm, setProductSearchTerm] = useState(''); // Tìm kiếm sản phẩm
+    const debouncedProductSearchTerm = useDebounce(productSearchTerm, 300);
     const [loadingProducts, setLoadingProducts] = useState(false);
+    const [loadingMoreProducts, setLoadingMoreProducts] = useState(false);
     const [productError, setProductError] = useState<string | null>(null);
     const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+    const [productPage, setProductPage] = useState(0);
+    const [hasMoreProducts, setHasMoreProducts] = useState(true);
+    const productModalScrollRef = useRef<HTMLDivElement | null>(null);
 
     // ⭐ Gộp tất cả ảnh vào 1 state
     const [attachmentImages, setAttachmentImages] = useState<string[]>([]);
@@ -124,37 +129,33 @@ export default function TaoPhieuXuatKho() {
     const ocrFileInputRef = useRef<HTMLInputElement | null>(null);
     const [processingOCR, setProcessingOCR] = useState(false);
 
+    // Load stocks với React Query cache
+    const { data: allStocks = [] } = useAllStocks();
+
+    // Tạo map stocks từ cached data
     useEffect(() => {
-        const fetchData = async () => {
+        if (allStocks.length === 0) return;
+
+        const allStocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
+        allStocks.forEach((stock) => {
+            if (!allStocksMap.has(stock.productId)) {
+                allStocksMap.set(stock.productId, new Map());
+            }
+            allStocksMap.get(stock.productId)!.set(stock.storeId, {
+                quantity: stock.quantity,
+                maxStock: stock.maxStock,
+                minStock: stock.minStock,
+            });
+        });
+        setAllStocksMap(allStocksMap);
+    }, [allStocks]);
+
+    useEffect(() => {
+        const loadRecentExports = async () => {
             try {
-                setLoadingCustomers(true);
-                // Lấy stores, customers, stocks và exports
-                const [storeList, customerList, allStocks, exportsList] = await Promise.all([
-                    getStores(),
-                    getCustomers(),
-                    getAllStock().catch(() => []), // Load tồn kho từ tất cả các kho
-                    getAllExports().catch(() => []), // Load exports để sort customers theo đã đặt gần đây
-                ]);
-                setStores(storeList);
-                setCustomers(customerList);
-
-                // Tạo map: productId -> Map<storeId, {quantity, maxStock, minStock}>
-                const stocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
-                allStocks.forEach((stock) => {
-                    if (!stocksMap.has(stock.productId)) {
-                        stocksMap.set(stock.productId, new Map());
-                    }
-                    stocksMap.get(stock.productId)!.set(stock.storeId, {
-                        quantity: stock.quantity,
-                        maxStock: stock.maxStock,
-                        minStock: stock.minStock,
-                    });
-                });
-                setAllStocksMap(stocksMap);
-
-                // Tạo map: customerId -> lastExportDate (ngày xuất gần nhất)
+                const exportsPage = await searchExportsPaged({ page: 0, size: 50 });
                 const exportMap = new Map<number, string>();
-                exportsList.forEach((exp: SupplierExport) => {
+                exportsPage.content.forEach((exp: SupplierExport) => {
                     if (exp.customerId) {
                         const existingDate = exportMap.get(exp.customerId);
                         if (!existingDate || new Date(exp.exportsDate) > new Date(existingDate)) {
@@ -164,18 +165,11 @@ export default function TaoPhieuXuatKho() {
                 });
                 setCustomerLastExportMap(exportMap);
             } catch (e) {
-                console.error(e);
-                setError(
-                    e instanceof Error
-                        ? e.message
-                        : 'Có lỗi xảy ra khi tải dữ liệu',
-                );
-            } finally {
-                setLoadingCustomers(false);
+                console.error('Load recent exports failed', e);
             }
         };
 
-        fetchData();
+        loadRecentExports();
     }, []);
 
     // Lọc và sắp xếp customers: sắp xếp theo đã đặt gần đây, sau đó lọc theo search term
@@ -359,16 +353,30 @@ export default function TaoPhieuXuatKho() {
         setProducts((prev) => prev.filter((p) => p.id !== id));
     };
 
-    const openProductModal = async () => {
-        setShowProductModal(true);
-        setProductError(null);
-        setSelectedProductIds([]); // Không pre-select
-
-        // Luôn reload sản phẩm
+    const loadProductsPage = async (page: number = 0, append: boolean = false) => {
         try {
+            if (append) {
+                setLoadingMoreProducts(true);
+            } else {
             setLoadingProducts(true);
-            const list = await getProducts();
-            setProductList(list);
+            }
+            setProductError(null);
+
+            const result = await searchProducts({
+                page,
+                size: 20, // Load 20 sản phẩm mỗi lần
+                name: debouncedProductSearchTerm || undefined,
+            });
+
+            if (append) {
+                setProductList((prev) => [...prev, ...result.content]);
+            } else {
+                setProductList(result.content);
+            }
+
+            // Kiểm tra xem còn trang nào không
+            setHasMoreProducts(result.number < result.totalPages - 1);
+            setProductPage(page);
         } catch (e) {
             console.error(e);
             setProductError(
@@ -378,13 +386,48 @@ export default function TaoPhieuXuatKho() {
             );
         } finally {
             setLoadingProducts(false);
+            setLoadingMoreProducts(false);
         }
+    };
+
+    const openProductModal = async () => {
+        setShowProductModal(true);
+        setProductError(null);
+        setSelectedProductIds([]);
+        setProductPage(0);
+        setHasMoreProducts(true);
+        setProductSearchTerm('');
+        await loadProductsPage(0, false);
     };
 
     const closeProductModal = () => {
         setShowProductModal(false);
-        setSelectedProductIds([]); // Reset khi đóng modal
+        setSelectedProductIds([]);
+        setProductList([]);
+        setProductPage(0);
+        setHasMoreProducts(true);
+        setProductSearchTerm('');
     };
+
+    // Load more products khi scroll đến cuối
+    const handleProductModalScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const target = e.currentTarget;
+        const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+        
+        if (scrollBottom < 100 && hasMoreProducts && !loadingMoreProducts && !loadingProducts) {
+            loadProductsPage(productPage + 1, true);
+        }
+    };
+
+    // Reload khi search term thay đổi (debounced)
+    useEffect(() => {
+        if (showProductModal) {
+            setProductPage(0);
+            setHasMoreProducts(true);
+            loadProductsPage(0, false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedProductSearchTerm]);
 
     const toggleSelectProduct = (productId: number) => {
         setSelectedProductIds((prev) =>
@@ -1471,9 +1514,24 @@ export default function TaoPhieuXuatKho() {
                                         />
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto p-6">
-                                    {loadingProducts ? (
-                                        <div className="text-center py-8 text-blue-gray-400">Đang tải...</div>
+                                <div 
+                                    ref={productModalScrollRef}
+                                    className="flex-1 overflow-y-auto p-6"
+                                    onScroll={handleProductModalScroll}
+                                >
+                                    {loadingProducts && productList.length === 0 ? (
+                                        // Skeleton loading khi load lần đầu
+                                        <div className="space-y-2">
+                                            {[...Array(5)].map((_, i) => (
+                                                <div key={i} className="animate-pulse flex items-center gap-3 p-3 rounded-lg border border-blue-gray-200">
+                                                    <div className="w-4 h-4 bg-blue-gray-200 rounded"></div>
+                                                    <div className="flex-1">
+                                                        <div className="h-4 bg-blue-gray-200 rounded w-3/4 mb-2"></div>
+                                                        <div className="h-3 bg-blue-gray-100 rounded w-1/2"></div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     ) : productError ? (
                                         <div className="text-center py-8 text-red-400">{productError}</div>
                                     ) : productList.length === 0 ? (
@@ -1504,10 +1562,6 @@ export default function TaoPhieuXuatKho() {
 
                                         // Tính toán sản phẩm có thể chọn và trạng thái "chọn tất cả"
                                         const existingProductIds = new Set(products.map((p) => p.productId));
-                                        const availableProducts = filteredProducts.filter((p) => !existingProductIds.has(p.id));
-                                        const availableProductIds = availableProducts.map((p) => p.id);
-                                        const allAvailableSelected = availableProductIds.length > 0 &&
-                                            availableProductIds.every((id) => selectedProductIds.includes(id));
 
                                         return (
                                             <>
@@ -1560,6 +1614,30 @@ export default function TaoPhieuXuatKho() {
                                                     );
                                                 })}
                                             </div>
+                                            {/* Loading more indicator */}
+                                            {loadingMoreProducts && (
+                                                <div className="mt-4 flex justify-center">
+                                                    <div className="flex items-center gap-2 text-blue-gray-500">
+                                                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        <span className="text-sm">Đang tải thêm...</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Load more button (fallback nếu scroll không hoạt động) */}
+                                            {hasMoreProducts && !loadingMoreProducts && productList.length > 0 && (
+                                                <div className="mt-4 flex justify-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => loadProductsPage(productPage + 1, true)}
+                                                        className="px-4 py-2 text-sm text-[#0099FF] hover:text-[#0088EE] border border-[#0099FF] rounded-lg hover:bg-blue-50 transition-colors"
+                                                    >
+                                                        Tải thêm sản phẩm
+                                                    </button>
+                                                </div>
+                                            )}
                                             </>
                                         );
                                     })()}

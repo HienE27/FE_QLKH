@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import FilterSection from '@/components/common/FilterSection';
 import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
@@ -12,6 +13,7 @@ import { PAGE_SIZE } from '@/constants/pagination';
 import { formatPrice, formatDateTime } from '@/lib/utils';
 import Pagination from '@/components/common/Pagination';
 import { usePagination } from '@/hooks/usePagination';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const statusConfig: Record<ExportStatus, { label: string; color: string }> = {
     PENDING: { label: 'Chờ duyệt', color: 'bg-yellow-500' },
@@ -23,58 +25,58 @@ const statusConfig: Record<ExportStatus, { label: string; color: string }> = {
 
 export default function ImportsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useUser();
     const userRoles = user?.roles || [];
 
-    const [pageData, setPageData] = useState<PageResponse<SupplierImport> | null>(null);
-
     // Kiểm tra quyền
     const canCreate = hasPermission(userRoles, PERMISSIONS.IMPORT_CREATE);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    // Filter states
-    const [filterCode, setFilterCode] = useState('');
-    const [filterStatus, setFilterStatus] = useState<ExportStatus | 'ALL'>('ALL');
-    const [filterFromDate, setFilterFromDate] = useState('');
-    const [filterToDate, setFilterToDate] = useState('');
+    // Filter states, initialized from URL params
+    const [filterCode, setFilterCode] = useState(searchParams.get('code') || '');
+    const [filterStatus, setFilterStatus] = useState<ExportStatus | 'ALL'>((searchParams.get('status') as ExportStatus) || 'ALL');
+    const [filterFromDate, setFilterFromDate] = useState(searchParams.get('from') || '');
+    const [filterToDate, setFilterToDate] = useState(searchParams.get('to') || '');
 
-    // Pagination states
-    const itemsPerPage = PAGE_SIZE;
+    const debouncedFilterCode = useDebounce(filterCode, 500);
 
-    const loadImports = async (page: number = 1) => {
-        try {
-            setLoading(true);
-            setError(null);
+    const currentPageFromUrl = parseInt(searchParams.get('page') || '1');
+    const [currentPage, setCurrentPage] = useState(currentPageFromUrl);
+
+    // React Query for data fetching
+    const { data: pageData, isLoading, isFetching, error, refetch } = useQuery<PageResponse<SupplierImport>, Error>({
+        queryKey: ['imports', debouncedFilterCode, filterStatus, filterFromDate, filterToDate, currentPage],
+        queryFn: async ({ signal }) => {
             const result = await searchImportsPaged({
-                status: filterStatus === 'ALL' ? 'ALL' : filterStatus,
-                code: filterCode || undefined,
+                status: filterStatus === 'ALL' ? undefined : filterStatus,
+                code: debouncedFilterCode || undefined,
                 from: filterFromDate || undefined,
                 to: filterToDate || undefined,
-                page: page - 1,
-                size: itemsPerPage,
+                page: currentPage - 1,
+                size: PAGE_SIZE,
+                signal,
             });
+            return result;
+        },
+        staleTime: 30 * 1000, // 30 seconds stale time
+        cacheTime: 5 * 60 * 1000, // 5 minutes cache time
+        keepPreviousData: true, // Keep previous data while fetching new
+    });
 
-            setPageData(result);
-        } catch (err) {
-            console.error('Error loading imports:', err);
-            if (err instanceof Error) {
-                setError(err.message);
-            } else {
-                setError('Lỗi tải danh sách phiếu nhập. Vui lòng kiểm tra backend đã chạy chưa.');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // Sync URL with filter changes
     useEffect(() => {
-        loadImports(1);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        const newParams = new URLSearchParams();
+        if (filterCode) newParams.set('code', filterCode);
+        if (filterStatus !== 'ALL') newParams.set('status', filterStatus);
+        if (filterFromDate) newParams.set('from', filterFromDate);
+        if (filterToDate) newParams.set('to', filterToDate);
+        if (currentPage > 1) newParams.set('page', String(currentPage));
+        router.push(`?${newParams.toString()}`, { scroll: false });
+    }, [filterCode, filterStatus, filterFromDate, filterToDate, currentPage, router]);
 
     const handleSearchClick = () => {
-        loadImports(1);
+        setCurrentPage(1);
+        refetch();
     };
 
     const handleClearFilters = () => {
@@ -82,7 +84,7 @@ export default function ImportsPage() {
         setFilterStatus('ALL');
         setFilterFromDate('');
         setFilterToDate('');
-        loadImports(1);
+        setCurrentPage(1);
     };
 
     const handleDelete = async (id: number, code: string) => {
@@ -94,15 +96,24 @@ export default function ImportsPage() {
     const totalItems = pageData?.totalElements ?? 0;
     const totalPages = pageData?.totalPages ?? 0;
     const currentData = pageData?.content ?? [];
+    const loading = isLoading || isFetching;
+    const errorMessage = error ? (error instanceof Error ? error.message : 'Lỗi tải danh sách phiếu nhập') : null;
 
     // Sử dụng hook usePagination với scroll preservation
-    const { currentPage, handlePageChange, paginationInfo } = usePagination({
-        itemsPerPage,
+    const { currentPage: pagedPage, handlePageChange, paginationInfo } = usePagination({
+        itemsPerPage: PAGE_SIZE,
         totalItems,
         totalPages,
-        onPageChange: loadImports,
+        onPageChange: (page) => setCurrentPage(page),
     });
     const startIndex = paginationInfo.startIndex;
+
+    useEffect(() => {
+        if (pagedPage !== currentPage) {
+            setCurrentPage(pagedPage);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pagedPage]);
 
     return (
         <>
@@ -114,7 +125,7 @@ export default function ImportsPage() {
             {/* Content Container */}
             <div className="bg-white rounded-xl shadow-sm border border-blue-gray-100">
                 <FilterSection
-                    error={error}
+                    error={errorMessage}
                     onClearFilter={handleClearFilters}
                     onCreateNew={canCreate ? () => router.push('/imports/create') : undefined}
                     createButtonText="Tạo phiếu nhập"
@@ -190,6 +201,12 @@ export default function ImportsPage() {
                             {loading ? 'Đang tải...' : 'Tìm kiếm'}
                         </button>
                     </div>
+                    {/* Auto search khi debounced filter thay đổi */}
+                    {debouncedFilterCode !== filterCode && (
+                        <div className="text-xs text-blue-gray-500 mt-2">
+                            Đang tìm kiếm...
+                        </div>
+                    )}
                 </FilterSection>
 
                 {/* Table */}
@@ -247,7 +264,7 @@ export default function ImportsPage() {
                             currentPage={currentPage}
                             totalPages={totalPages}
                             totalItems={totalItems}
-                            itemsPerPage={itemsPerPage}
+                            itemsPerPage={PAGE_SIZE}
                             onPageChange={handlePageChange}
                         />
                     )}

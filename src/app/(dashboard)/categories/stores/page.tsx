@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import FilterSection from '@/components/common/FilterSection';
 import DataTable from '@/components/common/DataTable';
@@ -9,6 +9,7 @@ import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
+import { useDebounce } from '@/hooks/useDebounce';
 import { deleteStore, searchStores } from '@/services/store.service';
 import type { Store } from '@/services/store.service';
 
@@ -23,13 +24,17 @@ export default function StoreManagementPage() {
     const [totalItems, setTotalItems] = useState(0);
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
+    // Debounce search inputs (500ms)
+    const debouncedSearchCode = useDebounce(searchCode, 500);
+    const debouncedSearchName = useDebounce(searchName, 500);
+
     const loadStores = async (page: number = 1) => {
         try {
             setError(null);
             setLoading(true);
             const result = await searchStores({
-                code: searchCode || undefined,
-                name: searchName || undefined,
+                code: debouncedSearchCode || undefined,
+                name: debouncedSearchName || undefined,
                 page: page - 1,
                 size: PAGE_SIZE,
             });
@@ -48,7 +53,7 @@ export default function StoreManagementPage() {
     useEffect(() => {
         loadStores(1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchCode, searchName]);
+    }, [debouncedSearchCode, debouncedSearchName]);
 
     // Sử dụng hook usePagination với scroll preservation
     const { currentPage, handlePageChange, resetPage } = usePagination({

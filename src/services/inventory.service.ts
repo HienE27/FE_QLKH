@@ -85,36 +85,20 @@ export async function getAllImports(params?: {
     code?: string;
     from?: string;
     to?: string;
+    signal?: AbortSignal;
 }): Promise<SupplierImport[]> {
-    const qs = new URLSearchParams();
-
-    if (params?.status && params.status !== "ALL") {
-        qs.set("status", params.status);
-    }
-    if (params?.code) qs.set("code", params.code);
-    if (params?.from) qs.set("from", params.from);
-    if (params?.to) qs.set("to", params.to);
-
-    const url =
-        qs.toString() === ""
-            ? `${API_BASE}/api/imports`
-            : `${API_BASE}/api/imports?${qs.toString()}`;
-
-    const token = getToken();
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(url, {
-        credentials: "include",
-        headers,
+    // Dùng searchImportsPaged với limit để tránh load toàn bộ
+    const result = await searchImportsPaged({
+        status: params?.status,
+        code: params?.code,
+        from: params?.from,
+        to: params?.to,
+        page: 0,
+        size: 50, // Limit to 50 recent imports
+        sortField: "date",
+        sortDir: "desc",
     });
-
-    if (!res.ok) {
-        throw new Error("Không lấy được danh sách phiếu nhập");
-    }
-
-    const json: ApiResponse<SupplierImport[]> = await res.json();
-    return json.data;
+    return result.content;
 }
 
 export async function searchImportsPaged(params?: {
@@ -126,6 +110,7 @@ export async function searchImportsPaged(params?: {
     sortDir?: "asc" | "desc";
     page?: number;
     size?: number;
+    signal?: AbortSignal;
 }): Promise<PageResponse<SupplierImport>> {
     const qs = new URLSearchParams();
 
@@ -152,10 +137,83 @@ export async function searchImportsPaged(params?: {
     const res = await fetch(url, {
         credentials: "include",
         headers,
+        signal: params?.signal,
     });
 
     if (!res.ok) {
         throw new Error("Không lấy được danh sách phiếu nhập (phân trang)");
+    }
+
+    const json: ApiResponse<PageResponse<SupplierImport>> = await res.json();
+    return json.data;
+}
+
+/**
+ * Lấy tất cả imports với pagination (endpoint mới từ BE)
+ * @param params - Pagination parameters
+ * @returns PageResponse với danh sách imports
+ */
+export async function getAllImportsPaged(params?: {
+    page?: number;
+    size?: number;
+    signal?: AbortSignal;
+}): Promise<PageResponse<SupplierImport>> {
+    const qs = new URLSearchParams();
+    if (typeof params?.page === "number") qs.set("page", String(params.page));
+    if (typeof params?.size === "number") qs.set("size", String(params.size));
+
+    const url = `${API_BASE}/api/imports/all/paged${qs.toString() ? `?${qs.toString()}` : ""}`;
+
+    const token = getToken();
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+        credentials: "include",
+        headers,
+        signal: params?.signal,
+    });
+
+    if (!res.ok) {
+        throw new Error("Không lấy được danh sách phiếu nhập");
+    }
+
+    const json: ApiResponse<PageResponse<SupplierImport>> = await res.json();
+    return json.data;
+}
+
+/**
+ * Lấy imports theo store với pagination (endpoint mới từ BE)
+ * @param storeId - ID của store
+ * @param params - Pagination parameters
+ * @returns PageResponse với danh sách imports
+ */
+export async function getImportsByStorePaged(
+    storeId: number,
+    params?: {
+        page?: number;
+        size?: number;
+        signal?: AbortSignal;
+    }
+): Promise<PageResponse<SupplierImport>> {
+    const qs = new URLSearchParams();
+    if (typeof params?.page === "number") qs.set("page", String(params.page));
+    if (typeof params?.size === "number") qs.set("size", String(params.size));
+
+    const url = `${API_BASE}/api/imports/by-store/${storeId}/paged${qs.toString() ? `?${qs.toString()}` : ""}`;
+
+    const token = getToken();
+    const headers: HeadersInit = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+        credentials: "include",
+        headers,
+        signal: params?.signal,
+    });
+
+    if (!res.ok) {
+        throw new Error(`Không lấy được danh sách phiếu nhập cho store ${storeId}`);
     }
 
     const json: ApiResponse<PageResponse<SupplierImport>> = await res.json();
@@ -170,36 +228,21 @@ export async function getAllExports(params?: {
     code?: string;
     from?: string;
     to?: string;
+    signal?: AbortSignal;
 }): Promise<SupplierExport[]> {
-    const qs = new URLSearchParams();
-
-    if (params?.status && params.status !== "ALL") {
-        qs.set("status", params.status);
-    }
-    if (params?.code) qs.set("code", params.code);
-    if (params?.from) qs.set("from", params.from);
-    if (params?.to) qs.set("to", params.to);
-
-    const url =
-        qs.toString() === ""
-            ? `${API_BASE}/api/exports`
-            : `${API_BASE}/api/exports?${qs.toString()}`;
-
-    const token = getToken();
-    const headers: HeadersInit = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(url, {
-        credentials: "include",
-        headers,
+    // Dùng searchExportsPaged với limit để tránh load toàn bộ
+    const result = await searchExportsPaged({
+        status: params?.status,
+        code: params?.code,
+        from: params?.from,
+        to: params?.to,
+        page: 0,
+        size: 50, // Limit to 50 recent exports
+        sortField: "date",
+        sortDir: "desc",
+        signal: params?.signal,
     });
-
-    if (!res.ok) {
-        throw new Error("Không lấy được danh sách phiếu xuất");
-    }
-
-    const json: ApiResponse<SupplierExport[]> = await res.json();
-    return json.data;
+    return result.content;
 }
 
 export async function searchExportsPaged(params?: {
@@ -211,6 +254,7 @@ export async function searchExportsPaged(params?: {
     sortDir?: "asc" | "desc";
     page?: number;
     size?: number;
+    signal?: AbortSignal;
 }): Promise<PageResponse<SupplierExport>> {
     const qs = new URLSearchParams();
 
@@ -235,6 +279,7 @@ export async function searchExportsPaged(params?: {
     const res = await fetch(url, {
         credentials: "include",
         headers,
+        signal: params?.signal,
     });
 
     if (!res.ok) {

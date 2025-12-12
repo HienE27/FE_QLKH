@@ -1,18 +1,19 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import {
-    getImportById,
     type SupplierImport,
     type SupplierImportDetail,
 } from '@/services/inventory.service';
 
-import { getSuppliers, type Supplier } from '@/services/supplier.service';
+import { type Supplier } from '@/services/supplier.service';
 import { getProduct } from '@/services/product.service';
-import { getStockByProductAndStore } from '@/services/stock.service';
+import { useImport } from '@/hooks/useImport';
+import { useSuppliers } from '@/hooks/useSuppliers';
+import { useAllStocks } from '@/hooks/useAllStocks';
 import { buildImageUrl, formatDateTimeWithSeconds } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
@@ -24,51 +25,54 @@ export default function ViewImportReceipt() {
     const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
     const id = Number(rawId);
 
-    const [data, setData] = useState<SupplierImport | null>(null);
+    // Load data với React Query cache
+    const { data: importData, isLoading: importLoading } = useImport(id);
+    const { data: suppliers = [] } = useSuppliers();
+    const { data: allStocks = [] } = useAllStocks();
+
+    // Tạo stocks map từ cached data - dùng useMemo để tránh tạo mới mỗi render
+    const stocksMap = useMemo(() => {
+        const map = new Map<number, Map<number, number>>();
+        allStocks.forEach((stock) => {
+            if (!map.has(stock.productId)) {
+                map.set(stock.productId, new Map());
+            }
+            map.get(stock.productId)!.set(stock.storeId, stock.quantity);
+        });
+        return map;
+    }, [allStocks]);
+
+    // Tính toán supplier và mapped import từ cached data
+    const supplier = importData?.supplierId
+        ? suppliers.find((s: Supplier) => s.id === importData.supplierId) ?? null
+        : null;
+
+    const data: SupplierImport | null = importData
+        ? {
+              ...importData,
+              supplierName: supplier?.name ?? importData.supplierName ?? null,
+              supplierCode: supplier?.code ?? importData.supplierCode ?? null,
+              supplierPhone: supplier?.phone ?? importData.supplierPhone ?? null,
+              supplierAddress: supplier?.address ?? importData.supplierAddress ?? null,
+          }
+        : null;
+
     const [items, setItems] = useState<(SupplierImportDetail & { availableQuantity?: number })[]>([]);
-    const [supplier, setSupplier] = useState<Supplier | null>(null);
-    const [loading, setLoading] = useState(true);
+    const loading = importLoading;
 
     useEffect(() => {
-        if (!id) return;
+        if (!importData) return;
 
         (async () => {
             try {
-                setLoading(true);
-
-                // Lấy phiếu nhập
-                const importData = await getImportById(id);
-
-                // ---- Fetch thông tin nguồn nhập ----
-                let foundSupplier: Supplier | null = null;
-                if (importData.supplierId) {
-                    const suppliers =
-                        (await getSuppliers().catch((err) => {
-                            console.error('Failed to fetch suppliers:', err);
-                            return [];
-                        })) ?? [];
-                        foundSupplier = suppliers.find((s: Supplier) => s.id === importData.supplierId) ?? null;
-                        console.log('🏪 Found supplier:', foundSupplier);
-                        setSupplier(foundSupplier);
-                }
-
-                const mappedImport: SupplierImport = {
-                    ...importData,
-                    supplierName: foundSupplier?.name ?? importData.supplierName ?? null,
-                    supplierCode: foundSupplier?.code ?? importData.supplierCode ?? null,
-                    supplierPhone: foundSupplier?.phone ?? importData.supplierPhone ?? null,
-                    supplierAddress: foundSupplier?.address ?? importData.supplierAddress ?? null,
-                };
-
-                setData(mappedImport);
-
-                // ---- DEBUG: Kiểm tra dữ liệu từ API ----
-                console.log('🔍 Import Data:', importData);
+                // ---- DEBUG: Kiểm tra dữ liệu từ API (commented for production) ----
+                // console.log('🔍 Import Data:', importData);
 
                 // ---- map lại danh sách sản phẩm ----
                 const rawItems = importData.items || [];
 
-                console.log('🔍 Raw Items:', rawItems);
+                // Debug: Raw Items (commented for production)
+                // console.log('🔍 Raw Items:', rawItems);
 
                 // ⭐ Fetch thông tin sản phẩm cho từng item
                 const mappedItems: (SupplierImportDetail & { availableQuantity?: number })[] = await Promise.all(
@@ -92,15 +96,10 @@ export default function ViewImportReceipt() {
                                 if (!productCode) productCode = product.code;
                                 if (!productName) productName = product.name;
 
-                                // Lấy tồn kho từ shop_stocks nếu có storeId
+                                // Lấy tồn kho từ stocksMap (cached data)
                                 if (it.storeId) {
-                                    try {
-                                        const stock = await getStockByProductAndStore(it.productId, Number(it.storeId));
-                                        availableQuantity = stock.quantity ?? 0;
-                                    } catch (stockErr) {
-                                        console.error('Failed to fetch stock:', it.productId, it.storeId, stockErr);
-                                        availableQuantity = 0;
-                                    }
+                                    const productStocks = stocksMap.get(it.productId);
+                                    availableQuantity = productStocks?.get(Number(it.storeId)) ?? 0;
                                 } else {
                                     availableQuantity = 0;
                                 }
@@ -125,15 +124,14 @@ export default function ViewImportReceipt() {
                     })
                 );
 
-                console.log('🔍 Mapped Items:', mappedItems);
+                // Debug: Mapped Items (commented for production)
+                // console.log('🔍 Mapped Items:', mappedItems);
                 setItems(mappedItems);
             } catch (err: unknown) {
                 console.error(err);
-            } finally {
-                setLoading(false);
             }
         })();
-    }, [id]);
+    }, [importData, stocksMap]);
 
     if (loading) {
         return (
@@ -498,15 +496,15 @@ type SupplierImportWithAudit = SupplierImport & {
 function StatusSidebar({ data }: { data: SupplierImport }) {
     const [processing, setProcessing] = useState(false);
     const auditData = data as SupplierImportWithAudit;
-    // Debug: log audit data to check role fields
-    console.log('🔍 Audit Data:', {
-        createdByRole: auditData.createdByRole,
-        approvedByRole: auditData.approvedByRole,
-        rejectedByRole: auditData.rejectedByRole,
-        importedByRole: auditData.importedByRole,
-        createdByName: auditData.createdByName,
-        approvedByName: auditData.approvedByName,
-    });
+    // Debug: log audit data to check role fields (commented for production)
+    // console.log('🔍 Audit Data:', {
+    //     createdByRole: auditData.createdByRole,
+    //     approvedByRole: auditData.approvedByRole,
+    //     rejectedByRole: auditData.rejectedByRole,
+    //     importedByRole: auditData.importedByRole,
+    //     createdByName: auditData.createdByName,
+    //     approvedByName: auditData.approvedByName,
+    // });
     const { user } = useUser();
     const userRoles = user?.roles || [];
     const isAdmin = hasRole(userRoles, ['ADMIN']);
@@ -532,10 +530,10 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
         (auditData as Record<string, string | undefined>).createdByUsername,
     );
     const createdByRole = auditData.createdByRole ?? '';
-    // Debug: log role data
-    if (createdByRole) {
-        console.log('🔍 createdByRole:', createdByRole);
-    }
+    // Debug: log role data (commented for production)
+    // if (createdByRole) {
+    //     console.log('🔍 createdByRole:', createdByRole);
+    // }
     const createdAt =
         auditData.createdAt ??
         auditData.createdDate ??
@@ -552,9 +550,10 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
         (auditData as Record<string, string | undefined>).approvedUser,
     );
     const approvedByRole = auditData.approvedByRole ?? '';
-    if (approvedByRole) {
-        console.log('🔍 approvedByRole:', approvedByRole);
-    }
+    // Debug: log role data (commented for production)
+    // if (approvedByRole) {
+    //     console.log('🔍 approvedByRole:', approvedByRole);
+    // }
     const approvedAt =
         auditData.approvedAt ??
         (auditData as Record<string, string | undefined>).approvedTime ??
@@ -569,9 +568,10 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
         (auditData as Record<string, string | undefined>).rejectedUser,
     );
     const rejectedByRole = auditData.rejectedByRole ?? '';
-    if (rejectedByRole) {
-        console.log('🔍 rejectedByRole:', rejectedByRole);
-    }
+    // Debug: log role data (commented for production)
+    // if (rejectedByRole) {
+    //     console.log('🔍 rejectedByRole:', rejectedByRole);
+    // }
     const rejectedAt =
         auditData.rejectedAt ??
         (auditData as Record<string, string | undefined>).rejectedTime ??
@@ -586,9 +586,10 @@ function StatusSidebar({ data }: { data: SupplierImport }) {
         (auditData as Record<string, string | undefined>).importedUser,
     );
     const importedByRole = auditData.importedByRole ?? '';
-    if (importedByRole) {
-        console.log('🔍 importedByRole:', importedByRole);
-    }
+    // Debug: log role data (commented for production)
+    // if (importedByRole) {
+    //     console.log('🔍 importedByRole:', importedByRole);
+    // }
     const importedAt =
         auditData.importedAt ??
         (auditData as Record<string, string | undefined>).importedTime ??

@@ -24,7 +24,8 @@ import { getSuppliers, type Supplier } from '@/services/supplier.service';
 import { formatPrice, buildImageUrl } from '@/lib/utils';
 import { PAGE_SIZE } from '@/constants/pagination';
 import Pagination from '@/components/common/Pagination';
-import { getAllStock, type StockByStore } from '@/services/stock.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
+import type { StockByStore } from '@/services/stock.service';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -38,8 +39,6 @@ export default function ProductsPage() {
 
   const [data, setData] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [stockMap, setStockMap] = useState<Map<number, number>>(new Map()); // Map productId -> total quantity
-  const [stockDetailsMap, setStockDetailsMap] = useState<Map<number, StockByStore[]>>(new Map()); // Map productId -> list of stocks by store
   const [loading, setLoading] = useState(true);
   const [paginationLoading, setPaginationLoading] = useState(false); // Loading riêng cho pagination
   const [error, setError] = useState<string | null>(null);
@@ -69,44 +68,46 @@ export default function ProductsPage() {
   const VIRTUAL_OVERSCAN = 8;
 
   // ===========================
-  // LOAD SUPPLIERS & STOCKS (chỉ load 1 lần khi mount)
+  // LOAD SUPPLIERS (chỉ load 1 lần khi mount)
   // ===========================
   useEffect(() => {
-    const loadStaticData = async () => {
+    const loadSuppliers = async () => {
       try {
-        // Load suppliers và stocks song song, chỉ 1 lần khi mount
-        const [supplierList, stockList] = await Promise.all([
-          getSuppliers(),
-          getAllStock().catch(() => []),
-        ]);
-
+        const supplierList = await getSuppliers();
         setSuppliers(supplierList);
-
-        // Tính tổng tồn kho cho mỗi sản phẩm (từ tất cả các kho)
-        const stockMap = new Map<number, number>();
-        const stockDetailsMap = new Map<number, StockByStore[]>();
-
-        stockList.forEach((stock) => {
-          // Tính tổng
-          const current = stockMap.get(stock.productId) || 0;
-          stockMap.set(stock.productId, current + stock.quantity);
-
-          // Lưu chi tiết theo từng kho
-          if (!stockDetailsMap.has(stock.productId)) {
-            stockDetailsMap.set(stock.productId, []);
-          }
-          stockDetailsMap.get(stock.productId)!.push(stock);
-        });
-
-        setStockMap(stockMap);
-        setStockDetailsMap(stockDetailsMap);
       } catch (err) {
-        console.error('Error loading suppliers/stocks:', err);
+        console.error('Error loading suppliers:', err);
       }
     };
 
-    loadStaticData();
+    loadSuppliers();
   }, []); // Chỉ chạy 1 lần khi mount
+
+  // ===========================
+  // LOAD STOCKS với React Query cache
+  // ===========================
+  const { data: stockList = [] } = useAllStocks();
+
+  // Tính tổng tồn kho cho mỗi sản phẩm (từ tất cả các kho) - dùng useMemo thay vì useState + useEffect
+  const stockMap = useMemo(() => {
+    const map = new Map<number, number>();
+    stockList.forEach((stock) => {
+      const current = map.get(stock.productId) || 0;
+      map.set(stock.productId, current + stock.quantity);
+    });
+    return map;
+  }, [stockList]);
+
+  const stockDetailsMap = useMemo(() => {
+    const map = new Map<number, StockByStore[]>();
+    stockList.forEach((stock) => {
+      if (!map.has(stock.productId)) {
+        map.set(stock.productId, []);
+      }
+      map.get(stock.productId)!.push(stock);
+    });
+    return map;
+  }, [stockList]);
 
   const queryClient = useQueryClient();
 

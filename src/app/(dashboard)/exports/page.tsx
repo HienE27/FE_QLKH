@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import FilterSection from '@/components/common/FilterSection';
 import DataTable from '@/components/common/DataTable';
 import ActionButtons from '@/components/common/ActionButtons';
@@ -12,6 +13,7 @@ import { PAGE_SIZE } from '@/constants/pagination';
 import { formatPrice, formatDateTime } from '@/lib/utils';
 import Pagination from '@/components/common/Pagination';
 import { usePagination } from '@/hooks/usePagination';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const statusConfig: Record<ExportStatus, { label: string; color: string }> = {
     PENDING: { label: 'Chờ duyệt', color: 'bg-yellow-500' },
@@ -23,58 +25,64 @@ const statusConfig: Record<ExportStatus, { label: string; color: string }> = {
 
 export default function ExportsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useUser();
     const userRoles = user?.roles || [];
 
-    const [pageData, setPageData] = useState<PageResponse<SupplierExport> | null>(null);
-
     // Kiểm tra quyền
     const canCreate = hasPermission(userRoles, PERMISSIONS.EXPORT_CREATE);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    // Filter states
-    const [filterCode, setFilterCode] = useState('');
-    const [filterStatus, setFilterStatus] = useState<ExportStatus | 'ALL'>('ALL');
-    const [filterFromDate, setFilterFromDate] = useState('');
-    const [filterToDate, setFilterToDate] = useState('');
+    // Initialize filter states from URL query params
+    const [filterCode, setFilterCode] = useState(searchParams.get('code') || '');
+    const [filterStatus, setFilterStatus] = useState<ExportStatus | 'ALL'>(
+        (searchParams.get('status') as ExportStatus | 'ALL') || 'ALL'
+    );
+    const [filterFromDate, setFilterFromDate] = useState(searchParams.get('from') || '');
+    const [filterToDate, setFilterToDate] = useState(searchParams.get('to') || '');
+    const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page')) || 1);
+
+    // Debounce filterCode để tránh gọi API quá nhiều khi user đang gõ
+    const debouncedFilterCode = useDebounce(filterCode, 500);
 
     // Pagination states
     const itemsPerPage = PAGE_SIZE;
 
-    const loadExports = async (page: number = 1) => {
-        try {
-            setLoading(true);
-            setError(null);
-            const result = await searchExportsPaged({
+    // Update URL query params khi filter thay đổi
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (debouncedFilterCode) params.set('code', debouncedFilterCode);
+        if (filterStatus !== 'ALL') params.set('status', filterStatus);
+        if (filterFromDate) params.set('from', filterFromDate);
+        if (filterToDate) params.set('to', filterToDate);
+        if (currentPage > 1) params.set('page', String(currentPage));
+
+        const newUrl = params.toString() ? `?${params.toString()}` : '';
+        router.replace(`/exports${newUrl}`, { scroll: false });
+    }, [debouncedFilterCode, filterStatus, filterFromDate, filterToDate, currentPage, router]);
+
+    // React Query với caching
+    const { data: pageData, isLoading: loading, error: queryError } = useQuery<PageResponse<SupplierExport>>({
+        queryKey: ['exports', debouncedFilterCode, filterStatus, filterFromDate, filterToDate, currentPage],
+        queryFn: async () => {
+            const controller = new AbortController();
+            return searchExportsPaged({
                 status: filterStatus === 'ALL' ? 'ALL' : filterStatus,
-                code: filterCode || undefined,
+                code: debouncedFilterCode || undefined,
                 from: filterFromDate || undefined,
                 to: filterToDate || undefined,
-                page: page - 1,
+                page: currentPage - 1,
                 size: itemsPerPage,
+                signal: controller.signal,
             });
+        },
+        staleTime: 30 * 1000, // Cache 30 giây
+        gcTime: 5 * 60 * 1000, // Giữ cache 5 phút
+    });
 
-            setPageData(result);
-        } catch (err) {
-            console.error('Error loading exports:', err);
-            if (err instanceof Error) {
-                setError(err.message);
-            } else {
-                setError('Lỗi tải danh sách phiếu xuất. Vui lòng kiểm tra backend đã chạy chưa.');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        loadExports(1);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const error = queryError instanceof Error ? queryError.message : null;
 
     const handleSearchClick = () => {
-        loadExports(1);
+        setCurrentPage(1);
     };
 
     const handleClearFilters = () => {
@@ -82,7 +90,12 @@ export default function ExportsPage() {
         setFilterStatus('ALL');
         setFilterFromDate('');
         setFilterToDate('');
-        loadExports(1);
+        setCurrentPage(1);
+    };
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleDelete = async (id: number, code: string) => {
@@ -94,15 +107,7 @@ export default function ExportsPage() {
     const totalItems = pageData?.totalElements ?? 0;
     const totalPages = pageData?.totalPages ?? 0;
     const currentData = pageData?.content ?? [];
-
-    // Sử dụng hook usePagination với scroll preservation
-    const { currentPage, handlePageChange, paginationInfo } = usePagination({
-        itemsPerPage,
-        totalItems,
-        totalPages,
-        onPageChange: loadExports,
-    });
-    const startIndex = paginationInfo.startIndex;
+    const startIndex = (currentPage - 1) * itemsPerPage;
 
     return (
         <>
@@ -248,7 +253,7 @@ export default function ExportsPage() {
                             totalPages={totalPages}
                             totalItems={totalItems}
                             itemsPerPage={itemsPerPage}
-                            onPageChange={handlePageChange}
+                            onPageChange={(page) => handlePageChange(page)}
                         />
                     )}
                 </div>

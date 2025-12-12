@@ -12,7 +12,6 @@ import ReportSummary from '../components/ReportSummary';
 import ReportTable from '../components/ReportTable';
 import {
   searchExportsPaged,
-  getAllExports,
   type SupplierExport,
   type ExportStatus,
   type PageResponse,
@@ -60,7 +59,8 @@ export default function ExportReportPage() {
 
   const [pageData, setPageData] = useState<PageResponse<SupplierExport> | null>(null);
   const [filteredData, setFilteredData] = useState<SupplierExport[]>([]);
-  const [allData, setAllData] = useState<SupplierExport[]>([]);
+  const [allDataForExport, setAllDataForExport] = useState<SupplierExport[]>([]);
+  const [loadingAllData, setLoadingAllData] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,22 +103,42 @@ export default function ExportReportPage() {
     );
   };
 
-  const allQuery = useQuery<SupplierExport[]>({
-    queryKey: ['exports-report-all', appliedFilters],
-    queryFn: async () => {
-      const allExports = await getAllExports({
-        status:
-          appliedFilters.status === 'ALL'
-            ? 'ALL'
-            : appliedFilters.status,
+  // Chỉ load toàn bộ khi cần export Excel/PDF, với date range filter
+  const loadAllDataForExport = async () => {
+    if (loadingAllData) return;
+    try {
+      setLoadingAllData(true);
+      // Load tất cả với date range filter để giảm dữ liệu
+      const allExports: SupplierExport[] = [];
+      let page = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const result = await searchExportsPaged({
+          status: appliedFilters.status === 'ALL' ? 'ALL' : appliedFilters.status,
         code: appliedFilters.code || undefined,
         from: appliedFilters.from || undefined,
         to: appliedFilters.to || undefined,
-      });
-      return applyClientFilters(allExports, appliedFilters.customer);
-    },
-    staleTime: 60_000,
-  });
+          page,
+          size: 100, // Load 100 mỗi lần
+        });
+        
+        allExports.push(...result.content);
+        hasMore = !result.last && result.content.length > 0;
+        page++;
+        
+        // Giới hạn tối đa 1000 bản ghi để tránh quá tải
+        if (allExports.length >= 1000) break;
+      }
+      
+      setAllDataForExport(applyClientFilters(allExports, appliedFilters.customer));
+    } catch (err) {
+      console.error('Error loading all data for export:', err);
+      setAllDataForExport([]);
+    } finally {
+      setLoadingAllData(false);
+    }
+  };
 
   const pageQuery = useQuery<PageResponse<SupplierExport>>({
     queryKey: ['exports-report', appliedFilters, currentPage, sortField, sortDirection],
@@ -143,17 +163,25 @@ export default function ExportReportPage() {
     setLoading(pageQuery.isFetching && currentPage === 1);
   }, [pageQuery.isFetching, currentPage]);
 
-  useEffect(() => {
-    if (allQuery.data) {
-      setAllData(applyClientFilters(allQuery.data, appliedFilters.customer));
-      setError(null);
-    }
-    if (allQuery.error instanceof Error) {
-      setError(allQuery.error.message);
-    } else if (allQuery.error) {
-      setError('Không thể tải báo cáo phiếu xuất');
-    }
-  }, [allQuery.data, allQuery.error, appliedFilters.customer]);
+  // Tính toán summary từ paginated data (ước lượng)
+  const estimatedTotal = useMemo(() => {
+    if (!pageData) return { total: 0, exported: 0, pending: 0, cancelled: 0 };
+    // Ước lượng dựa trên tỷ lệ trong page hiện tại
+    const pageExported = filteredData.filter(r => r.status === 'EXPORTED').length;
+    const pagePending = filteredData.filter(r => r.status === 'PENDING').length;
+    const pageCancelled = filteredData.filter(r => r.status === 'CANCELLED').length;
+    const pageTotal = filteredData.length;
+    
+    if (pageTotal === 0) return { total: 0, exported: 0, pending: 0, cancelled: 0 };
+    
+    const ratio = pageData.totalElements / pageTotal;
+    return {
+      total: pageData.totalElements,
+      exported: Math.round(pageExported * ratio),
+      pending: Math.round(pagePending * ratio),
+      cancelled: Math.round(pageCancelled * ratio),
+    };
+  }, [pageData, filteredData]);
 
   useEffect(() => {
     if (pageQuery.data) {
@@ -168,12 +196,19 @@ export default function ExportReportPage() {
     }
   }, [pageQuery.data, pageQuery.error, appliedFilters.customer]);
 
+  // Load toàn bộ data khi filter được apply để tính statistics chính xác
+  useEffect(() => {
+    // Load data ngay khi filter được apply (bao gồm cả khi không có filter - load tất cả)
+    loadAllDataForExport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedFilters]);
+
   const handleSearch = () => {
     const nextFilters = { ...filters, customer: debouncedFilters.customer, code: debouncedFilters.code };
     setAppliedFilters(nextFilters);
     setCurrentPage(1);
+    setAllDataForExport([]); // Reset all data khi filter thay đổi
     queryClient.invalidateQueries({ queryKey: ['exports-report'] });
-    queryClient.invalidateQueries({ queryKey: ['exports-report-all'] });
   };
 
   const handleReset = () => {
@@ -182,8 +217,8 @@ export default function ExportReportPage() {
     setSortField('date');
     setSortDirection('desc');
     setCurrentPage(1);
+    setAllDataForExport([]); // Reset all data
     queryClient.invalidateQueries({ queryKey: ['exports-report'] });
-    queryClient.invalidateQueries({ queryKey: ['exports-report-all'] });
   };
 
   const toggleSort = (field: SortField) => {
@@ -194,30 +229,42 @@ export default function ExportReportPage() {
     setCurrentPage(1);
   };
 
-  const totalValue = useMemo(
-    () => allData.reduce((sum, record) => sum + (record.totalValue || 0), 0),
-    [allData],
-  );
+  // Tính toán từ toàn bộ data đã load (chính xác, không ước lượng)
+  const totalValue = useMemo(() => {
+    if (allDataForExport.length > 0) {
+      return allDataForExport.reduce((sum, record) => sum + (record.totalValue || 0), 0);
+    }
+    // Nếu chưa load xong, trả về 0 thay vì ước lượng sai
+    return 0;
+  }, [allDataForExport]);
 
-  const exportedCount = useMemo(
-    () => allData.filter((record) => record.status === 'EXPORTED').length,
-    [allData],
-  );
+  const exportedCount = useMemo(() => {
+    if (allDataForExport.length > 0) {
+      return allDataForExport.filter((record) => record.status === 'EXPORTED').length;
+    }
+    return 0;
+  }, [allDataForExport]);
 
-  const pendingCount = useMemo(
-    () => allData.filter((record) => record.status === 'PENDING').length,
-    [allData],
-  );
+  const pendingCount = useMemo(() => {
+    if (allDataForExport.length > 0) {
+      return allDataForExport.filter((record) => record.status === 'PENDING').length;
+    }
+    return 0;
+  }, [allDataForExport]);
 
-  const cancelledCount = useMemo(
-    () => allData.filter((record) => record.status === 'CANCELLED').length,
-    [allData],
-  );
+  const cancelledCount = useMemo(() => {
+    if (allDataForExport.length > 0) {
+      return allDataForExport.filter((record) => record.status === 'CANCELLED').length;
+    }
+    return 0;
+  }, [allDataForExport]);
 
-  const averageValue = useMemo(
-    () => (allData.length ? Math.round(totalValue / allData.length) : 0),
-    [allData, totalValue],
-  );
+  const averageValue = useMemo(() => {
+    if (allDataForExport.length > 0) {
+      return Math.round(totalValue / allDataForExport.length);
+    }
+    return 0;
+  }, [allDataForExport, totalValue]);
 
   const totalItems = pageData?.totalElements ?? filteredData.length;
   const totalPages = pageData?.totalPages ?? 1;
@@ -264,8 +311,23 @@ export default function ExportReportPage() {
     }
   }, [pagedPage, currentPage]);
 
-  const buildRows = () =>
-    allData.map((record, index) => ({
+
+  const handleExportExcel = async () => {
+    // Load tất cả data nếu chưa có
+    let dataToExport = allDataForExport;
+    if (dataToExport.length === 0) {
+      await loadAllDataForExport();
+      // Đợi state update - reload từ state sau khi load xong
+      await new Promise(resolve => setTimeout(resolve, 100));
+      dataToExport = allDataForExport;
+      if (dataToExport.length === 0) {
+        alert('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
+        return;
+      }
+    }
+    try {
+      const XLSX = await import('xlsx');
+      const rows = dataToExport.map((record, index) => ({
       STT: index + 1,
       'Mã phiếu': record.code,
       'Khách hàng': record.customerName || '-',
@@ -273,15 +335,6 @@ export default function ExportReportPage() {
       'Trạng thái': statusLabels[record.status],
       'Giá trị': record.totalValue || 0,
     }));
-
-  const handleExportExcel = async () => {
-    if (!allData.length) {
-      alert('Không có dữ liệu để xuất.');
-      return;
-    }
-    try {
-      const XLSX = await import('xlsx');
-      const rows = buildRows();
       const sheet = XLSX.utils.json_to_sheet(
         rows.map((row) => ({
           ...row,
@@ -299,9 +352,17 @@ export default function ExportReportPage() {
   };
 
   const handleExportPDF = async () => {
-    if (!allData.length) {
-      alert('Không có dữ liệu để xuất.');
+    // Load tất cả data nếu chưa có
+    let dataToExport = allDataForExport;
+    if (dataToExport.length === 0) {
+      await loadAllDataForExport();
+      // Đợi state update
+      await new Promise(resolve => setTimeout(resolve, 100));
+      dataToExport = allDataForExport;
+      if (dataToExport.length === 0) {
+        alert('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
       return;
+      }
     }
     try {
       const { default: jsPDF } = await import('jspdf');
@@ -312,12 +373,22 @@ export default function ExportReportPage() {
       doc.text('Báo cáo phiếu xuất kho', 14, 18);
       doc.setFontSize(11);
       doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
-      doc.text(`Tổng phiếu: ${allData.length}`, 14, 32);
-      doc.text(`Tổng giá trị: ${formatPrice(totalValue)} đ`, 80, 32);
+      doc.text(`Tổng phiếu: ${dataToExport.length}`, 14, 32);
+      const exportTotalValue = dataToExport.reduce((sum, r) => sum + (r.totalValue || 0), 0);
+      doc.text(`Tổng giá trị: ${formatPrice(exportTotalValue)} đ`, 80, 32);
+
+      const rows = dataToExport.map((record, index) => ({
+        STT: index + 1,
+        'Mã phiếu': record.code,
+        'Khách hàng': record.customerName || '-',
+        'Ngày xuất': formatDateTime(record.exportsDate),
+        'Trạng thái': statusLabels[record.status],
+        'Giá trị': record.totalValue || 0,
+      }));
 
       autoTable(doc, {
         head: [['STT', 'Mã phiếu', 'Khách hàng', 'Ngày xuất', 'Trạng thái', 'Giá trị']],
-        body: buildRows().map((row) => [
+        body: rows.map((row) => [
           row.STT,
           row['Mã phiếu'],
           row['Khách hàng'],
@@ -365,7 +436,7 @@ export default function ExportReportPage() {
             totalLabel="Tổng phiếu xuất"
             processedLabel="Đã xuất kho"
             cancelledLabel="Đã hủy"
-            totalCount={allData.length}
+            totalCount={allDataForExport.length > 0 ? allDataForExport.length : (pageData?.totalElements ?? 0)}
             totalValue={totalValue}
             processedCount={exportedCount}
             pendingCount={pendingCount}

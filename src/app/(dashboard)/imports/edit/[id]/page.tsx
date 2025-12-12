@@ -11,9 +11,7 @@ import {
 } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 
-import { getSuppliers, type Supplier } from '@/services/supplier.service';
-import { getProducts, getProduct } from '@/services/product.service';
-import { getStores, type Store } from '@/services/store.service';
+import { getProduct } from '@/services/product.service';
 
 import {
     getImportById,
@@ -22,7 +20,10 @@ import {
     type SupplierImportDetail,
 } from '@/services/inventory.service';
 
-import { getAllStock } from '@/services/stock.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
+import { useSuppliers } from '@/hooks/useSuppliers';
+import { useStores } from '@/hooks/useStores';
+import { useProducts } from '@/hooks/useProducts';
 
 import type { Product as BaseProduct } from '@/types/product';
 
@@ -103,8 +104,11 @@ export default function EditImportReceiptPage() {
         Array.isArray(params?.id) ? params.id[0] : params?.id,
     );
 
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [stores, setStores] = useState<Store[]>([]);
+    // Load suppliers, stores, products với React Query cache
+    const { data: suppliers = [] } = useSuppliers();
+    const { data: stores = [] } = useStores();
+    const { data: productList = [] } = useProducts();
+
     const [items, setItems] = useState<ProductItem[]>([]);
     const [allStocksMap, setAllStocksMap] = useState<Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>>(new Map()); // Map productId -> Map<storeId, {quantity, maxStock, minStock}>
 
@@ -124,7 +128,7 @@ export default function EditImportReceiptPage() {
     const [error, setError] = useState<string | null>(null);
 
     const [showProductModal, setShowProductModal] = useState(false);
-    const [productList, setProductList] = useState<Product[]>([]);
+    // productList được lấy từ useProducts hook
     const [loadingProducts, setLoadingProducts] = useState(false);
     const [productError, setProductError] = useState<string | null>(null);
     const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
@@ -133,45 +137,42 @@ export default function EditImportReceiptPage() {
     const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
     const supplierDropdownRef = useRef<HTMLDivElement | null>(null);
 
+    // Load stocks với React Query cache
+    const { data: allStocks = [] } = useAllStocks();
+
+    // Tạo map stocks từ cached data
+    useEffect(() => {
+        if (allStocks.length === 0) return;
+
+        const allStocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
+        allStocks.forEach((stock) => {
+            if (!allStocksMap.has(stock.productId)) {
+                allStocksMap.set(stock.productId, new Map());
+            }
+            allStocksMap.get(stock.productId)!.set(stock.storeId, {
+                quantity: stock.quantity,
+                maxStock: stock.maxStock,
+                minStock: stock.minStock,
+            });
+        });
+        setAllStocksMap(allStocksMap);
+    }, [allStocks]);
+
     /* ============================================================
        LOAD DỮ LIỆU PHIẾU NHẬP
     ============================================================ */
     useEffect(() => {
-        if (!importId) return;
+        if (!importId || suppliers.length === 0) return;
 
         (async () => {
             try {
-                const [sup, storeList, productList, allStocks, receipt] = await Promise.all([
-                    getSuppliers(), // Lấy tất cả suppliers (NCC, INTERNAL, STAFF, ...)
-                    getStores(),
-                    getProducts(),
-                    getAllStock().catch(() => []), // Load tồn kho từ tất cả các kho
-                    getImportById(importId),
-                ]);
-
-                setSuppliers(sup);
-                setStores(storeList);
-                setProductList(productList); // Lưu danh sách sản phẩm để dùng trong modal
-
-                // Tạo map: productId -> Map<storeId, {quantity, maxStock, minStock}>
-                const stocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
-                allStocks.forEach((stock) => {
-                    if (!stocksMap.has(stock.productId)) {
-                        stocksMap.set(stock.productId, new Map());
-                    }
-                    stocksMap.get(stock.productId)!.set(stock.storeId, {
-                        quantity: stock.quantity,
-                        maxStock: stock.maxStock,
-                        minStock: stock.minStock,
-                    });
-                });
-                setAllStocksMap(stocksMap);
+                const receipt = await getImportById(importId);
 
                 /* --- NCC --- */
                 setSupplierId(receipt.supplierId);
 
                 // ⭐ Tự động fill thông tin NCC từ danh sách suppliers
-                const selectedSupplier = sup.find((s) => s.id === receipt.supplierId);
+                const selectedSupplier = suppliers.find((s) => s.id === receipt.supplierId);
                 if (selectedSupplier) {
                     setSupplierPhone(selectedSupplier.phone ?? '');
                     setSupplierAddress(selectedSupplier.address ?? '');
@@ -268,8 +269,6 @@ export default function EditImportReceiptPage() {
             setSupplierPhone('');
             setSupplierAddress('');
             setSupplierSearchTerm('');
-            // Clear danh sách sản phẩm khi không chọn NCC
-            setProductList([]);
             return;
         }
 
@@ -501,22 +500,6 @@ export default function EditImportReceiptPage() {
 
         // Không set selectedProductIds từ items - để người dùng chọn lại từ đầu
         setSelectedProductIds([]);
-
-        // Luôn reload sản phẩm để đảm bảo lọc đúng theo NCC hiện tại
-        try {
-            setLoadingProducts(true);
-            const list = await getProducts();
-            setProductList(list);
-        } catch (e) {
-            console.error(e);
-            setProductError(
-                e instanceof Error
-                    ? e.message
-                    : 'Có lỗi xảy ra khi tải danh sách hàng hóa',
-            );
-        } finally {
-            setLoadingProducts(false);
-        }
     };
 
     const closeProductModal = () => {

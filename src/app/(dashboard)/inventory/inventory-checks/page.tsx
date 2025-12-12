@@ -56,7 +56,8 @@ export default function InventoryChecksPage() {
                 size: itemsPerPage,
             });
 
-            console.log('✅ Loaded checks:', result);
+            // Debug: Loaded checks (commented for production)
+            // console.log('✅ Loaded checks:', result);
             setPageData(result);
             // Note: currentPage được quản lý bởi usePagination hook
         } catch (err) {

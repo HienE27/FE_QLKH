@@ -10,15 +10,6 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 
-import {
-    getSuppliers,
-    type Supplier,
-} from '@/services/supplier.service';
-
-import {
-    getStores,
-    type Store,
-} from '@/services/store.service';
 
 import {
     createImport,
@@ -31,7 +22,9 @@ import {
 } from '@/services/product.service';
 import type { Product } from '@/types/product';
 
-import { getAllStock } from '@/services/stock.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
+import { useSuppliers } from '@/hooks/useSuppliers';
+import { useStores } from '@/hooks/useStores';
 
 import { buildImageUrl, formatPrice, parseNumber } from '@/lib/utils';
 import { ocrReceipt } from '@/services/ai.service';
@@ -92,7 +85,10 @@ export default function TaoPhieuNhapKho() {
         }
     }, [userLoading, canCreate, router]);
 
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    // Load suppliers và stores với React Query cache
+    const { data: suppliers = [], isLoading: loadingSuppliers } = useSuppliers();
+    const { data: stores = [] } = useStores();
+
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | ''>('');
     const [supplierPhone, setSupplierPhone] = useState('');
     const [supplierAddress, setSupplierAddress] = useState('');
@@ -100,13 +96,9 @@ export default function TaoPhieuNhapKho() {
     const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
     const supplierDropdownRef = useRef<HTMLDivElement | null>(null);
 
-    const [stores, setStores] = useState<Store[]>([]);
-
     const [reason, setReason] = useState('');
 
     const [products, setProducts] = useState<ProductItem[]>([]);
-
-    const [loadingSuppliers, setLoadingSuppliers] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -125,46 +117,26 @@ export default function TaoPhieuNhapKho() {
     const ocrFileInputRef = useRef<HTMLInputElement | null>(null);
     const [processingOCR, setProcessingOCR] = useState(false);
 
+    // Load stocks với React Query cache
+    const { data: allStocks = [], isLoading: stocksLoading } = useAllStocks();
+
+    // Tạo map stocks từ cached data
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                setLoadingSuppliers(true);
-                // Lấy tất cả suppliers (NCC, INTERNAL, STAFF, ...), stores, và stocks
-                const [supplierList, storeList, allStocks] = await Promise.all([
-                    getSuppliers(), // Không filter theo type, lấy tất cả
-                    getStores(),
-                    getAllStock().catch(() => []), // Load tồn kho từ tất cả các kho
-                ]);
-                setSuppliers(supplierList);
-                setStores(storeList);
+        if (allStocks.length === 0) return;
 
-                // Tạo map: productId -> Map<storeId, {quantity, maxStock, minStock}>
-                const stocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
-                allStocks.forEach((stock) => {
-                    if (!stocksMap.has(stock.productId)) {
-                        stocksMap.set(stock.productId, new Map());
-                    }
-                    stocksMap.get(stock.productId)!.set(stock.storeId, {
-                        quantity: stock.quantity,
-                        maxStock: stock.maxStock,
-                        minStock: stock.minStock,
-                    });
-                });
-                setAllStocksMap(stocksMap);
-            } catch (e) {
-                console.error(e);
-                setError(
-                    e instanceof Error
-                        ? e.message
-                        : 'Có lỗi xảy ra khi tải dữ liệu',
-                );
-            } finally {
-                setLoadingSuppliers(false);
+        const stocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
+        allStocks.forEach((stock) => {
+            if (!stocksMap.has(stock.productId)) {
+                stocksMap.set(stock.productId, new Map());
             }
-        };
-
-        fetchData();
-    }, []);
+            stocksMap.get(stock.productId)!.set(stock.storeId, {
+                quantity: stock.quantity,
+                maxStock: stock.maxStock,
+                minStock: stock.minStock,
+            });
+        });
+        setAllStocksMap(stocksMap);
+    }, [allStocks]);
 
     // Lọc suppliers theo search term
     const filteredSuppliers = useMemo(() => {
@@ -699,7 +671,8 @@ export default function TaoPhieuNhapKho() {
 
                 // Tạo map để match warehouse với stores
                 const warehouseMap = new Map<string, number>();
-                console.log('🏪 Available stores:', stores.map(s => ({ id: s.id, name: s.name, code: s.code })));
+                // Debug: Available stores (commented for production)
+                // console.log('🏪 Available stores:', stores.map(s => ({ id: s.id, name: s.name, code: s.code })));
                 stores.forEach(store => {
                     // Match theo nhiều format khác nhau
                     const storeDisplayName = `${store.name} (${store.code})`;
@@ -726,7 +699,8 @@ export default function TaoPhieuNhapKho() {
                         warehouseMap.set(`kho (${store.code})`.toLowerCase(), store.id);
                     }
                 });
-                console.log('🗺️ Warehouse map keys:', Array.from(warehouseMap.keys()));
+                // Debug: Warehouse map keys (commented for production)
+                // console.log('🗺️ Warehouse map keys:', Array.from(warehouseMap.keys()));
 
                 const newProducts: ProductItem[] = [];
                 let nextId = 1;
@@ -750,23 +724,27 @@ export default function TaoPhieuNhapKho() {
                     let matchedStoreId: number | '' = '';
                     if (extractedProduct.warehouse) {
                         const warehouseLower = extractedProduct.warehouse.toLowerCase().trim();
-                        console.log('🔍 Matching warehouse:', extractedProduct.warehouse, '->', warehouseLower);
+                        // Debug: Matching warehouse (commented for production)
+                        // console.log('🔍 Matching warehouse:', extractedProduct.warehouse, '->', warehouseLower);
 
                         // Thử match trực tiếp với các format khác nhau
                         const foundStoreId = warehouseMap.get(warehouseLower);
                         if (foundStoreId) {
                             matchedStoreId = foundStoreId;
-                            console.log('✅ Matched directly:', foundStoreId);
+                            // Debug: Matched directly (commented for production)
+                            // console.log('✅ Matched directly:', foundStoreId);
                         } else {
                             // Nếu không match, thử extract mã từ ngoặc (ưu tiên nhất)
                             const codeMatch = extractedProduct.warehouse.match(/\(([^)]+)\)/);
                             if (codeMatch) {
                                 const code = codeMatch[1].trim();
-                                console.log('🔍 Trying to match by code:', code);
+                                // Debug: Trying to match by code (commented for production)
+                                // console.log('🔍 Trying to match by code:', code);
                                 const storeByCode = stores.find(s => s.code === code);
                                 if (storeByCode) {
                                     matchedStoreId = storeByCode.id;
-                                    console.log('✅ Matched by code:', storeByCode.id, storeByCode.name);
+                                    // Debug: Matched by code (commented for production)
+                                    // console.log('✅ Matched by code:', storeByCode.id, storeByCode.name);
                                 }
                             }
 
@@ -775,12 +753,14 @@ export default function TaoPhieuNhapKho() {
                                 const numberMatch = warehouseLower.match(/kho\s*(\d+)/);
                                 if (numberMatch) {
                                     const khoNumber = numberMatch[1];
-                                    console.log('🔍 Trying to match by number:', khoNumber);
+                                    // Debug: Trying to match by number (commented for production)
+                                    // console.log('🔍 Trying to match by number:', khoNumber);
                                     // Thử tìm theo id
                                     const storeById = stores.find(s => s.id === Number(khoNumber));
                                     if (storeById) {
                                         matchedStoreId = storeById.id;
-                                        console.log('✅ Matched by id:', storeById.id);
+                                        // Debug: Matched by id (commented for production)
+                                        // console.log('✅ Matched by id:', storeById.id);
                                     } else {
                                         // Thử tìm theo name chứa số
                                         const storeByName = stores.find(s =>
@@ -789,7 +769,8 @@ export default function TaoPhieuNhapKho() {
                                         );
                                         if (storeByName) {
                                             matchedStoreId = storeByName.id;
-                                            console.log('✅ Matched by name:', storeByName.id, storeByName.name);
+                                            // Debug: Matched by name (commented for production)
+                                            // console.log('✅ Matched by name:', storeByName.id, storeByName.name);
                                         }
                                     }
                                 }
@@ -803,7 +784,8 @@ export default function TaoPhieuNhapKho() {
                                 );
                                 if (storeByNameOnly) {
                                     matchedStoreId = storeByNameOnly.id;
-                                    console.log('✅ Matched by name only:', storeByNameOnly.id);
+                                    // Debug: Matched by name only (commented for production)
+                                    // console.log('✅ Matched by name only:', storeByNameOnly.id);
                                 }
                             }
                         }
@@ -812,10 +794,12 @@ export default function TaoPhieuNhapKho() {
                     // Nếu không match được warehouse từ AI, dùng kho đầu tiên làm mặc định
                     if (!matchedStoreId && stores.length > 0) {
                         matchedStoreId = stores[0].id;
-                        console.log('⚠️ Using default store:', matchedStoreId);
+                        // Debug: Using default store (commented for production)
+                        // console.log('⚠️ Using default store:', matchedStoreId);
                     }
 
-                    console.log('📦 Final matchedStoreId for product:', extractedProduct.name, '->', matchedStoreId);
+                    // Debug: Final matchedStoreId (commented for production)
+                    // console.log('📦 Final matchedStoreId for product:', extractedProduct.name, '->', matchedStoreId);
 
                     if (matchedProduct) {
                         const newProduct: ProductItem = {
@@ -833,7 +817,8 @@ export default function TaoPhieuNhapKho() {
                             supplierId: matchedProduct.supplierId,
                             supplierIds: matchedProduct.supplierIds,
                         };
-                        console.log('✅ Created product with storeId:', newProduct.name, '-> storeId:', newProduct.storeId);
+                        // Debug: Created product with storeId (commented for production)
+                        // console.log('✅ Created product with storeId:', newProduct.name, '-> storeId:', newProduct.storeId);
                         newProducts.push(newProduct);
                     } else {
                         // Nếu không tìm thấy sản phẩm, vẫn thêm vào với tên từ OCR
@@ -850,7 +835,8 @@ export default function TaoPhieuNhapKho() {
                             availableQuantity: 0,
                             storeId: matchedStoreId, // Đảm bảo storeId được set
                         };
-                        console.log('✅ Created product (no match) with storeId:', newProduct.name, '-> storeId:', newProduct.storeId);
+                        // Debug: Created product (no match) with storeId (commented for production)
+                        // console.log('✅ Created product (no match) with storeId:', newProduct.name, '-> storeId:', newProduct.storeId);
                         newProducts.push(newProduct);
                     }
                 }
@@ -1466,7 +1452,7 @@ export default function TaoPhieuNhapKho() {
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6">
-                                    {loadingProducts ? (
+                                    {loadingProducts || stocksLoading ? (
                                         <div className="text-center py-8 text-blue-gray-400">Đang tải...</div>
                                     ) : productError ? (
                                         <div className="text-center py-8 text-red-400">{productError}</div>

@@ -8,7 +8,7 @@ import { ensureVnFont } from '@/lib/pdf';
 import { getProducts } from '@/services/product.service';
 import { getOrders } from '@/services/order.service';
 import { aiInventoryForecast } from '@/services/ai.service';
-import { getAllStock } from '@/services/stock.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
 import type { Product } from '@/types/product';
 import type { Order } from '@/types/order';
 
@@ -135,6 +135,9 @@ export default function InventoryReportPage() {
     const [filterMaxQuantity, setFilterMaxQuantity] = useState('');
     const [filterStockStatus, setFilterStockStatus] = useState<'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK'>('ALL');
 
+    // Load stocks với React Query cache
+    const { data: stockList = [], isLoading: stocksLoading } = useAllStocks();
+
     // Sort states
     const [sortName, setSortName] = useState<'none' | 'asc' | 'desc'>('none');
     const [sortQuantity, setSortQuantity] = useState<'none' | 'asc' | 'desc'>('none');
@@ -150,18 +153,18 @@ export default function InventoryReportPage() {
             setLoading(true);
             setError(null);
 
-            // Lấy sản phẩm và tồn kho
-            const [products, stockList] = await Promise.all([
-                getProducts(),
-                getAllStock().catch(() => []) // Nếu lỗi thì trả về mảng rỗng
-            ]);
+            // Lấy sản phẩm (stocks đã được load qua useAllStocks hook)
+            const products = await getProducts();
 
             // Tổng hợp tồn kho theo productId (từ tất cả các kho)
+            // Đảm bảo stockList đã có dữ liệu
             const stockMap = new Map<number, number>();
-            stockList.forEach((stock) => {
-                const current = stockMap.get(stock.productId) || 0;
-                stockMap.set(stock.productId, current + stock.quantity);
-            });
+            if (stockList && stockList.length > 0) {
+                stockList.forEach((stock) => {
+                    const current = stockMap.get(stock.productId) || 0;
+                    stockMap.set(stock.productId, current + stock.quantity);
+                });
+            }
 
             // Cập nhật quantity cho từng sản phẩm từ tồn kho thực tế
             const productsWithStock: ProductWithStock[] = products.map(product => ({
@@ -280,10 +283,13 @@ export default function InventoryReportPage() {
         setSortQuantity('none');
     };
 
+    // Load data khi stockList đã sẵn sàng
     useEffect(() => {
-        loadData();
+        if (!stocksLoading && stockList.length >= 0) {
+            loadData();
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [stockList, stocksLoading]);
 
     // Re-apply sorting when sort options change
     useEffect(() => {

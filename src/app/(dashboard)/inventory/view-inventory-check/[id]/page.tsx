@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import {
-    getInventoryCheckById,
     approveInventoryCheck,
     confirmInventoryCheck,
     rejectInventoryCheck,
@@ -13,6 +12,7 @@ import {
     type InventoryCheck,
     type InventoryCheckDetail,
 } from '@/services/inventory.service';
+import { useInventoryCheck } from '@/hooks/useInventoryCheck';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
 
@@ -27,24 +27,25 @@ export default function ViewInventoryCheckPage() {
     const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
     const id = Number(rawId);
 
-    const [data, setData] = useState<InventoryCheck | null>(null);
+    // Load data với React Query cache
+    const { data: checkData, isLoading: checkLoading } = useInventoryCheck(id);
+
+    const data = checkData ?? null;
     const [items, setItems] = useState<InventoryCheckDetail[]>([]);
-    const [loading, setLoading] = useState(true);
+    const loading = checkLoading;
 
     useEffect(() => {
-        if (!id) return;
+        if (!checkData) return;
 
         (async () => {
             try {
-                setLoading(true);
 
-                const checkData = await getInventoryCheckById(id);
-                setData(checkData);
-
-                console.log('🔍 Check Data:', checkData);
+                // Debug: Check Data (commented for production)
+                // console.log('🔍 Check Data:', checkData);
 
                 const rawItems = checkData.items || [];
-                console.log('🔍 Raw Items:', rawItems);
+                // Debug: Raw Items (commented for production)
+                // console.log('🔍 Raw Items:', rawItems);
 
                 // Fetch thông tin sản phẩm cho từng item
                 const mappedItems: InventoryCheckDetail[] = await Promise.all(
@@ -84,15 +85,14 @@ export default function ViewInventoryCheckPage() {
                     })
                 );
 
-                console.log('🔍 Mapped Items:', mappedItems);
+                // Debug: Mapped Items (commented for production)
+                // console.log('🔍 Mapped Items:', mappedItems);
                 setItems(mappedItems);
             } catch (err: unknown) {
                 console.error(err);
-            } finally {
-                setLoading(false);
             }
         })();
-    }, [id]);
+    }, [checkData]);
 
     if (loading) {
         return (

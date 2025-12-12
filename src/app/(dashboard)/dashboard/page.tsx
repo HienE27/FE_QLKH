@@ -3,10 +3,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { getProducts } from '@/services/product.service';
-import { getAllImports, getAllExports, type SupplierImport, type SupplierExport } from '@/services/inventory.service';
-import { getSuppliers } from '@/services/supplier.service';
 import { getDashboardAlerts, DashboardAlert } from '@/services/ai.service';
+import { useProducts } from '@/hooks/useProducts';
+import { useImports } from '@/hooks/useImports';
+import { useExports } from '@/hooks/useExports';
 
 // Lazy load AI components để giảm bundle size ban đầu
 const SmartInventoryAlertPopup = dynamic(() => import('@/components/ai/SmartInventoryAlertPopup'), {
@@ -15,7 +15,7 @@ const SmartInventoryAlertPopup = dynamic(() => import('@/components/ai/SmartInve
 const AlertProductsPopup = dynamic(() => import('@/components/ai/AlertProductsPopup'), {
   ssr: false,
 });
-import { getAllStock } from '@/services/stock.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
 import { formatPrice } from '@/lib/utils';
 import {
   Header,
@@ -29,27 +29,89 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  
+  // Load data với React Query cache
+  const { data: stockList = [], isLoading: stocksLoading } = useAllStocks();
+  const { data: products = [], isLoading: productsLoading } = useProducts();
+  const { data: importsPage, isLoading: importsLoading } = useImports({ page: 0, size: 100 });
+  const { data: exportsPage, isLoading: exportsLoading } = useExports({ page: 0, size: 100 });
+
+  const loading = stocksLoading || productsLoading || importsLoading || exportsLoading;
+
+  // Tính toán statistics từ cached data
+  useEffect(() => {
+    if (stockList.length === 0 || products.length === 0) return;
+
+    // Tính stockMap từ cached stocks
+    const stockMap = new Map<number, number>();
+    stockList.forEach((stock) => {
+      const current = stockMap.get(stock.productId) || 0;
+      stockMap.set(stock.productId, current + stock.quantity);
+    });
+
+    // Tính statistics từ products và stocks
+    const inventoryValue = products.reduce(
+      (sum, p) => {
+        const qty = stockMap.get(p.id) || 0;
+        return sum + qty * (p.unitPrice || 0);
+      },
+      0
+    );
+    setTotalInventoryValue(inventoryValue);
+
+    const lowStock = products.filter(p => {
+      const qty = stockMap.get(p.id) || 0;
+      return qty > 0 && qty <= 10;
+    }).length;
+    setLowStockCount(lowStock);
+
+    const outStock = products.filter(p => (stockMap.get(p.id) || 0) === 0).length;
+    setOutOfStockCount(outStock);
+  }, [stockList, products]);
 
   // Statistics
-  const [totalProducts, setTotalProducts] = useState(0);
   const [totalInventoryValue, setTotalInventoryValue] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [outOfStockCount, setOutOfStockCount] = useState(0);
 
-  // Import/Export stats
-  const [totalImports, setTotalImports] = useState(0);
-  const [totalImportValue, setTotalImportValue] = useState(0);
-  const [totalExports, setTotalExports] = useState(0);
-  const [totalExportValue, setTotalExportValue] = useState(0);
-  const [pendingImports, setPendingImports] = useState(0);
-  const [pendingExports, setPendingExports] = useState(0);
-  const [importedCount, setImportedCount] = useState(0);
-  const [exportedCount, setExportedCount] = useState(0);
+  // Tính toán từ cached data
+  const totalProducts = products.length;
+  const imports = useMemo(() => importsPage?.content || [], [importsPage?.content]);
+  const exports = useMemo(() => exportsPage?.content || [], [exportsPage?.content]);
 
-  // Recent activities
-  const [recentImports, setRecentImports] = useState<SupplierImport[]>([]);
-  const [recentExports, setRecentExports] = useState<SupplierExport[]>([]);
+  // Import/Export stats - tính từ cached data
+  const importedItems = imports.filter(i => i.status === 'IMPORTED');
+  const totalImports = importedItems.length;
+  const totalImportValue = importedItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
+  const importedCount = importedItems.length;
+  const pendingImports = imports.filter(i => i.status === 'PENDING').length;
+
+  const exportedItems = exports.filter(e => e.status === 'EXPORTED');
+  const totalExports = exportedItems.length;
+  const totalExportValue = exportedItems.reduce((sum, e) => sum + (e.totalValue || 0), 0);
+  const exportedCount = exportedItems.length;
+  const pendingExports = exports.filter(e => e.status === 'PENDING').length;
+
+  // Recent activities - tính từ cached data
+  const recentImports = useMemo(() => {
+    return [...imports]
+      .sort((a, b) => {
+        const dateA = new Date(a.importsDate || 0).getTime();
+        const dateB = new Date(b.importsDate || 0).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 3);
+  }, [imports]);
+
+  const recentExports = useMemo(() => {
+    return [...exports]
+      .sort((a, b) => {
+        const dateA = new Date(a.exportsDate || 0).getTime();
+        const dateB = new Date(b.exportsDate || 0).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 3);
+  }, [exports]);
 
   // AI Alerts
   const [aiAlerts, setAiAlerts] = useState<DashboardAlert[]>([]);
@@ -58,11 +120,6 @@ export default function DashboardPage() {
   const [showSmartAlertPopup, setShowSmartAlertPopup] = useState(false);
   const [showAlertProductsPopup, setShowAlertProductsPopup] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<DashboardAlert | null>(null);
-
-  useEffect(() => {
-    loadDashboardData();
-    // Không tự động load AI alerts, chỉ load khi user nhấn nút
-  }, []);
 
   const loadAiAlerts = async () => {
     try {
@@ -88,99 +145,6 @@ export default function DashboardPage() {
         return 'bg-green-50 border-green-200';
       default:
         return 'bg-[#0099FF]/10 border-[#0099FF]/30';
-    }
-  };
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-
-      const [products, , imports, exports] = await Promise.all([
-        getProducts(),
-        getSuppliers('NCC'),
-        getAllImports({}),
-        getAllExports({}),
-      ]);
-
-      setTotalProducts(products.length);
-
-      const stockList = await getAllStock().catch(() => []);
-      const stockMap = new Map<number, number>();
-      stockList.forEach((stock) => {
-        const current = stockMap.get(stock.productId) || 0;
-        stockMap.set(stock.productId, current + stock.quantity);
-      });
-
-      const inventoryValue = products.reduce(
-        (sum, p) => {
-          const qty = stockMap.get(p.id) || 0;
-          return sum + qty * (p.unitPrice || 0);
-        },
-        0
-      );
-      setTotalInventoryValue(inventoryValue);
-
-      const lowStock = products.filter(p => {
-        const qty = stockMap.get(p.id) || 0;
-        return qty > 0 && qty <= 10;
-      }).length;
-      setLowStockCount(lowStock);
-
-      const outStock = products.filter(p => (stockMap.get(p.id) || 0) === 0).length;
-      setOutOfStockCount(outStock);
-
-      const importedItems = imports.filter(i => i.status === 'IMPORTED');
-      setTotalImports(importedItems.length);
-      const importValue = importedItems.reduce((sum, i) => sum + (i.totalValue || 0), 0);
-      setTotalImportValue(importValue);
-      setImportedCount(importedItems.length);
-      const pendingImp = imports.filter(i => i.status === 'PENDING').length;
-      setPendingImports(pendingImp);
-
-      const sortedImports = [...imports]
-        .sort((a, b) => {
-          const dateA = new Date(a.importsDate || 0).getTime();
-          const dateB = new Date(b.importsDate || 0).getTime();
-          return dateB - dateA;
-        })
-        .slice(0, 3);
-      setRecentImports(sortedImports);
-
-      const exportedItems = exports.filter(e => e.status === 'EXPORTED');
-      setTotalExports(exportedItems.length);
-      const exportValue = exportedItems.reduce((sum, e) => sum + (e.totalValue || 0), 0);
-      setTotalExportValue(exportValue);
-      setExportedCount(exportedItems.length);
-      const pendingExp = exports.filter(e => e.status === 'PENDING').length;
-      setPendingExports(pendingExp);
-
-      const sortedExports = [...exports]
-        .sort((a, b) => {
-          const dateA = new Date(a.exportsDate || 0).getTime();
-          const dateB = new Date(b.exportsDate || 0).getTime();
-          return dateB - dateA;
-        })
-        .slice(0, 3);
-      setRecentExports(sortedExports);
-
-    } catch (err) {
-      console.error('Error loading dashboard:', err);
-      setTotalProducts(0);
-      setTotalInventoryValue(0);
-      setLowStockCount(0);
-      setOutOfStockCount(0);
-      setTotalImports(0);
-      setTotalImportValue(0);
-      setTotalExports(0);
-      setTotalExportValue(0);
-      setPendingImports(0);
-      setPendingExports(0);
-      setImportedCount(0);
-      setExportedCount(0);
-      setRecentImports([]);
-      setRecentExports([]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -230,7 +194,7 @@ export default function DashboardPage() {
     ].filter(item => item.value > 0);
   }, [importedCount, exportedCount, pendingImports, pendingExports]);
 
-  if (loading) {
+  if (loading || stocksLoading) {
     return (
       <div className="text-center py-20">
         <div className="text-xl text-blue-gray-600">Đang tải dữ liệu...</div>

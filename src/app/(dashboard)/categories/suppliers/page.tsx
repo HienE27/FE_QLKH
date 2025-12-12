@@ -11,6 +11,7 @@ import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
     searchSuppliers,
     deleteSupplier,
@@ -32,16 +33,22 @@ export default function QuanLyNguonHang() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
 
+    // Debounce search inputs (500ms)
+    // Note: searchType là dropdown nên không cần debounce, nhưng để nhất quán vẫn thêm
+    const debouncedSearchCode = useDebounce(searchCode, 500);
+    const debouncedSearchName = useDebounce(searchName, 500);
+    const debouncedSearchPhone = useDebounce(searchPhone, 500);
+
     // Load data từ BE với pagination
     const loadData = async (page: number = 1) => {
             try {
                 setLoading(true);
                 setError(null);
             const result = await searchSuppliers({
-                code: searchCode || undefined,
-                name: searchName || undefined,
-                type: searchType || undefined,
-                phone: searchPhone || undefined,
+                code: debouncedSearchCode || undefined,
+                name: debouncedSearchName || undefined,
+                type: searchType || undefined, // Dropdown không cần debounce
+                phone: debouncedSearchPhone || undefined,
                 page: page - 1, // Backend dùng 0-based
                 size: PAGE_SIZE,
             });
@@ -62,7 +69,7 @@ export default function QuanLyNguonHang() {
     useEffect(() => {
         loadData(1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchCode, searchName, searchType, searchPhone]);
+    }, [debouncedSearchCode, debouncedSearchName, searchType, debouncedSearchPhone]);
 
     // Helper function để chuyển đổi type sang tiếng Việt
     const getTypeLabel = (type: string | null | undefined): string => {

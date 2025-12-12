@@ -9,7 +9,6 @@ import { usePagination } from '@/hooks/usePagination';
 import { useDebounce } from '@/hooks/useDebounce';
 import {
     searchImportsPaged,
-    getAllImports,
     type SupplierImport,
     type ExportStatus,
     type PageResponse,
@@ -61,7 +60,8 @@ export default function ImportReportPage() {
     const queryClient = useQueryClient();
     const [pageData, setPageData] = useState<PageResponse<SupplierImport> | null>(null);
     const [filteredData, setFilteredData] = useState<SupplierImport[]>([]);
-    const [allData, setAllData] = useState<SupplierImport[]>([]); // Tất cả dữ liệu để tính thống kê
+    const [allDataForExport, setAllDataForExport] = useState<SupplierImport[]>([]);
+    const [loadingAllData, setLoadingAllData] = useState(false);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -105,20 +105,42 @@ export default function ImportReportPage() {
         );
     };
 
-    // Query all data for statistics
-    const allQuery = useQuery({
-        queryKey: ['imports-report-all', appliedFilters],
-        queryFn: async () => {
-            const allImports = await getAllImports({
-                status: appliedFilters.status === 'ALL' ? undefined : appliedFilters.status,
+    // Chỉ load toàn bộ khi cần export Excel/PDF, với date range filter
+    const loadAllDataForExport = async () => {
+        if (loadingAllData) return;
+        try {
+            setLoadingAllData(true);
+            // Load tất cả với date range filter để giảm dữ liệu
+            const allImports: SupplierImport[] = [];
+            let page = 0;
+            let hasMore = true;
+            
+            while (hasMore) {
+                const result = await searchImportsPaged({
+                    status: appliedFilters.status === 'ALL' ? 'ALL' : appliedFilters.status,
                 code: appliedFilters.code || undefined,
                 from: appliedFilters.from || undefined,
                 to: appliedFilters.to || undefined,
-            });
-            return applyClientFilters(allImports, appliedFilters.supplier);
-        },
-        staleTime: 60_000,
-    });
+                    page,
+                    size: 100, // Load 100 mỗi lần
+                });
+                
+                allImports.push(...result.content);
+                hasMore = !result.last && result.content.length > 0;
+                page++;
+                
+                // Giới hạn tối đa 1000 bản ghi để tránh quá tải
+                if (allImports.length >= 1000) break;
+            }
+            
+            setAllDataForExport(applyClientFilters(allImports, appliedFilters.supplier));
+        } catch (err) {
+            console.error('Error loading all data for export:', err);
+            setAllDataForExport([]);
+        } finally {
+            setLoadingAllData(false);
+        }
+    };
 
     // Query paginated data for table
     const pageQuery = useQuery({
@@ -138,21 +160,25 @@ export default function ImportReportPage() {
         staleTime: 60_000,
     });
 
-    // Đồng bộ dữ liệu từ React Query về state hiển thị
-    useEffect(() => {
-        if (allQuery.data) {
-            setAllData(allQuery.data);
-            setError(null);
-        }
-        if (allQuery.error) {
-            console.error('Failed to load all import data', allQuery.error);
-            setError(
-                allQuery.error instanceof Error
-                    ? allQuery.error.message
-                    : 'Không thể tải báo cáo phiếu nhập',
-            );
-        }
-    }, [allQuery.data, allQuery.error]);
+    // Tính toán summary từ paginated data (ước lượng)
+    const estimatedTotal = useMemo(() => {
+        if (!pageData) return { total: 0, imported: 0, pending: 0, cancelled: 0 };
+        // Ước lượng dựa trên tỷ lệ trong page hiện tại
+        const pageImported = filteredData.filter(r => r.status === 'IMPORTED').length;
+        const pagePending = filteredData.filter(r => r.status === 'PENDING').length;
+        const pageCancelled = filteredData.filter(r => r.status === 'CANCELLED').length;
+        const pageTotal = filteredData.length;
+        
+        if (pageTotal === 0) return { total: 0, imported: 0, pending: 0, cancelled: 0 };
+        
+        const ratio = pageData.totalElements / pageTotal;
+        return {
+            total: pageData.totalElements,
+            imported: Math.round(pageImported * ratio),
+            pending: Math.round(pagePending * ratio),
+            cancelled: Math.round(pageCancelled * ratio),
+        };
+    }, [pageData, filteredData]);
 
     useEffect(() => {
         if (pageQuery.data) {
@@ -174,12 +200,19 @@ export default function ImportReportPage() {
         setLoading(pageQuery.isFetching && currentPage === 1);
     }, [pageQuery.isFetching, currentPage]);
 
+    // Load toàn bộ data khi filter được apply để tính statistics chính xác
+    useEffect(() => {
+        // Load data ngay khi filter được apply (bao gồm cả khi không có filter - load tất cả)
+        loadAllDataForExport();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appliedFilters]);
+
     const handleSearch = () => {
         const nextFilters = { ...filters, supplier: debouncedFilters.supplier, code: debouncedFilters.code };
         setAppliedFilters(nextFilters);
         setCurrentPage(1);
+        setAllDataForExport([]); // Reset all data khi filter thay đổi
         queryClient.invalidateQueries({ queryKey: ['imports-report'] });
-        queryClient.invalidateQueries({ queryKey: ['imports-report-all'] });
     };
 
     const handleReset = () => {
@@ -188,8 +221,8 @@ export default function ImportReportPage() {
         setSortField('date');
         setSortDirection('desc');
         setCurrentPage(1);
+        setAllDataForExport([]); // Reset all data
         queryClient.invalidateQueries({ queryKey: ['imports-report'] });
-        queryClient.invalidateQueries({ queryKey: ['imports-report-all'] });
     };
 
     const toggleSort = (field: SortField) => {
@@ -200,30 +233,42 @@ export default function ImportReportPage() {
         setCurrentPage(1);
     };
 
-    // Tính thống kê dựa trên TẤT CẢ dữ liệu, không chỉ trang hiện tại
-    const totalValue = useMemo(
-        () => allData.reduce((sum, record) => sum + (record.totalValue || 0), 0),
-        [allData],
-    );
+    // Tính toán từ toàn bộ data đã load (chính xác, không ước lượng)
+    const totalValue = useMemo(() => {
+        if (allDataForExport.length > 0) {
+            return allDataForExport.reduce((sum, record) => sum + (record.totalValue || 0), 0);
+        }
+        // Nếu chưa load xong, trả về 0 thay vì ước lượng sai
+        return 0;
+    }, [allDataForExport]);
 
-    const importedCount = useMemo(
-        () => allData.filter((record) => record.status === 'IMPORTED').length,
-        [allData],
-    );
+    const importedCount = useMemo(() => {
+        if (allDataForExport.length > 0) {
+            return allDataForExport.filter((record) => record.status === 'IMPORTED').length;
+        }
+        return 0;
+    }, [allDataForExport]);
 
-    const pendingCount = useMemo(
-        () => allData.filter((record) => record.status === 'PENDING').length,
-        [allData],
-    );
+    const pendingCount = useMemo(() => {
+        if (allDataForExport.length > 0) {
+            return allDataForExport.filter((record) => record.status === 'PENDING').length;
+        }
+        return 0;
+    }, [allDataForExport]);
 
-    const cancelledCount = useMemo(
-        () => allData.filter((record) => record.status === 'CANCELLED').length,
-        [allData],
-    );
+    const cancelledCount = useMemo(() => {
+        if (allDataForExport.length > 0) {
+            return allDataForExport.filter((record) => record.status === 'CANCELLED').length;
+        }
+        return 0;
+    }, [allDataForExport]);
 
-    const averageValue = allData.length
-        ? Math.round(totalValue / allData.length)
-        : 0;
+    const averageValue = useMemo(() => {
+        if (allDataForExport.length > 0) {
+            return Math.round(totalValue / allDataForExport.length);
+        }
+        return 0;
+    }, [allDataForExport, totalValue]);
 
     const totalItems = pageData?.totalElements ?? filteredData.length;
     const totalPages = pageData?.totalPages ?? 1;
@@ -272,8 +317,23 @@ export default function ImportReportPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pagedPage]);
 
-    const buildRows = () =>
-        allData.map((record, index) => ({
+
+    const handleExportExcel = async () => {
+        // Load tất cả data nếu chưa có
+        let dataToExport = allDataForExport;
+        if (dataToExport.length === 0) {
+            await loadAllDataForExport();
+            // Đợi state update - reload từ state sau khi load xong
+            await new Promise(resolve => setTimeout(resolve, 100));
+            dataToExport = allDataForExport;
+            if (dataToExport.length === 0) {
+                alert('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
+                return;
+            }
+        }
+        try {
+            const XLSX = await import('xlsx');
+            const rows = dataToExport.map((record, index) => ({
             STT: index + 1,
             'Mã phiếu': record.code,
             'Nhà cung cấp': record.supplierName || '-',
@@ -281,15 +341,6 @@ export default function ImportReportPage() {
             'Trạng thái': statusLabels[record.status],
             'Giá trị': record.totalValue || 0,
         }));
-
-    const handleExportExcel = async () => {
-        if (!allData.length) {
-            alert('Không có dữ liệu để xuất.');
-            return;
-        }
-        try {
-            const XLSX = await import('xlsx');
-            const rows = buildRows();
             const sheet = XLSX.utils.json_to_sheet(
                 rows.map((row) => ({
                     ...row,
@@ -307,9 +358,17 @@ export default function ImportReportPage() {
     };
 
     const handleExportPDF = async () => {
-        if (!allData.length) {
-            alert('Không có dữ liệu để xuất.');
+        // Load tất cả data nếu chưa có
+        let dataToExport = allDataForExport;
+        if (dataToExport.length === 0) {
+            await loadAllDataForExport();
+            // Đợi state update
+            await new Promise(resolve => setTimeout(resolve, 100));
+            dataToExport = allDataForExport;
+            if (dataToExport.length === 0) {
+                alert('Không có dữ liệu để xuất. Vui lòng kiểm tra lại bộ lọc.');
             return;
+            }
         }
         try {
             const { default: jsPDF } = await import('jspdf');
@@ -320,12 +379,22 @@ export default function ImportReportPage() {
             doc.text('Báo cáo phiếu nhập kho', 14, 18);
             doc.setFontSize(11);
             doc.text(`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`, 14, 26);
-            doc.text(`Tổng phiếu: ${allData.length}`, 14, 32);
-            doc.text(`Tổng giá trị: ${formatPrice(totalValue)} đ`, 80, 32);
+            doc.text(`Tổng phiếu: ${dataToExport.length}`, 14, 32);
+            const exportTotalValue = dataToExport.reduce((sum, r) => sum + (r.totalValue || 0), 0);
+            doc.text(`Tổng giá trị: ${formatPrice(exportTotalValue)} đ`, 80, 32);
+
+            const rows = dataToExport.map((record, index) => ({
+                STT: index + 1,
+                'Mã phiếu': record.code,
+                'Nhà cung cấp': record.supplierName || '-',
+                'Ngày nhập': formatDateTime(record.importsDate),
+                'Trạng thái': statusLabels[record.status],
+                'Giá trị': record.totalValue || 0,
+            }));
 
             autoTable(doc, {
                 head: [['STT', 'Mã phiếu', 'Nhà cung cấp', 'Ngày nhập', 'Trạng thái', 'Giá trị']],
-                body: buildRows().map((row) => [
+                body: rows.map((row) => [
                     row.STT,
                     row['Mã phiếu'],
                     row['Nhà cung cấp'],
@@ -461,7 +530,7 @@ export default function ImportReportPage() {
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm text-blue-gray-600 truncate">Tổng phiếu nhập</p>
-                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1 break-words">{allData.length}</p>
+                                        <p className="text-2xl font-bold text-blue-gray-800 mt-1 break-words">{allDataForExport.length > 0 ? allDataForExport.length : (pageData?.totalElements ?? 0)}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-[#0099FF]/10 rounded-full flex items-center justify-center">
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

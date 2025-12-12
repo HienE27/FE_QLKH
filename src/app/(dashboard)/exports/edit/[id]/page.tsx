@@ -11,11 +11,13 @@ import {
 } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 
-import { getCustomers, updateCustomer, type Customer } from '@/services/customer.service';
-import { getProducts, getProduct, uploadProductImage } from '@/services/product.service';
+import { updateCustomer, type Customer } from '@/services/customer.service';
+import { getProduct, uploadProductImage } from '@/services/product.service';
 import type { Product } from '@/types/product';
-import { getAllStock } from '@/services/stock.service';
-import { getStores, type Store } from '@/services/store.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
+import { useStores } from '@/hooks/useStores';
+import { useCustomers } from '@/hooks/useCustomers';
+import { useProducts } from '@/hooks/useProducts';
 
 import {
     getExportById,
@@ -46,7 +48,11 @@ export default function EditExportReceiptPage() {
         Array.isArray(params?.id) ? params.id[0] : params?.id,
     );
 
-    const [customers, setCustomers] = useState<Customer[]>([]);
+    // Load stores, customers, products với React Query cache
+    const { data: stores = [] } = useStores();
+    const { data: customers = [] } = useCustomers();
+    const { data: productList = [] } = useProducts();
+
     const [items, setItems] = useState<ProductItem[]>([]);
 
     const [customerId, setCustomerId] = useState<number | ''>('');
@@ -66,49 +72,43 @@ export default function EditExportReceiptPage() {
     const [error, setError] = useState<string | null>(null);
 
     const [showProductModal, setShowProductModal] = useState(false);
-    type ProductWithStock = Product & { quantity?: number; unit?: string | null };
-
-    const [productList, setProductList] = useState<ProductWithStock[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(false);
     const [productError, setProductError] = useState<string | null>(null);
     const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
     const [productSearchTerm, setProductSearchTerm] = useState('');
     const [allStocksMap, setAllStocksMap] = useState<Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>>(new Map());
-    const [stores, setStores] = useState<Store[]>([]);
+
+    // Load stocks với React Query cache
+    const { data: allStocks = [], isLoading: stocksLoading } = useAllStocks();
+
+    // Tạo map stocks từ cached data
+    useEffect(() => {
+        if (allStocks.length === 0) return;
+
+        const allStocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
+        allStocks.forEach((stock) => {
+            if (!allStocksMap.has(stock.productId)) {
+                allStocksMap.set(stock.productId, new Map());
+            }
+            allStocksMap.get(stock.productId)!.set(stock.storeId, {
+                quantity: stock.quantity,
+                maxStock: stock.maxStock,
+                minStock: stock.minStock,
+            });
+        });
+        setAllStocksMap(allStocksMap);
+    }, [allStocks]);
 
     useEffect(() => {
-        if (!exportId) return;
+        if (!exportId || customers.length === 0) return;
 
         (async () => {
             try {
-                const [customerList, , receipt, allStocks, storeList] = await Promise.all([
-                    getCustomers(),
-                    getProducts(),
-                    getExportById(exportId),
-                    getAllStock().catch(() => []),
-                    getStores(),
-                ]);
-
-                setCustomers(customerList);
-                setStores(storeList);
-
-                // Tạo map: productId -> Map<storeId, {quantity, maxStock, minStock}>
-                const stocksMap = new Map<number, Map<number, { quantity: number; maxStock?: number; minStock?: number }>>();
-                allStocks.forEach((stock) => {
-                    if (!stocksMap.has(stock.productId)) {
-                        stocksMap.set(stock.productId, new Map());
-                    }
-                    stocksMap.get(stock.productId)!.set(stock.storeId, {
-                        quantity: stock.quantity,
-                        maxStock: stock.maxStock,
-                        minStock: stock.minStock,
-                    });
-                });
-                setAllStocksMap(stocksMap);
+                const receipt = await getExportById(exportId);
 
                 setCustomerId(receipt.customerId ?? '');
 
-                const selectedCustomer = receipt.customerId ? customerList.find((c) => c.id === receipt.customerId) : null;
+                const selectedCustomer = receipt.customerId ? customers.find((c) => c.id === receipt.customerId) : null;
                 if (selectedCustomer) {
                     setCustomerPhone(selectedCustomer.phone ?? receipt.customerPhone ?? '');
                     setCustomerAddress(selectedCustomer.address ?? receipt.customerAddress ?? '');
@@ -144,15 +144,16 @@ export default function EditExportReceiptPage() {
                                 if (!code) code = product.code;
                                 if (!name) name = product.name;
 
-                                // Tính tổng tồn kho từ tất cả kho
-                                const productStocks = stocksMap.get(it.productId);
-                                if (productStocks) {
+                                // Tính tổng tồn kho từ tất cả kho (nếu allStocksMap đã có data)
+                                const productStocks = allStocksMap.get(it.productId);
+                                if (productStocks && productStocks.size > 0) {
                                     let totalStock = 0;
                                     productStocks.forEach((stockInfo) => {
                                         totalStock += stockInfo.quantity ?? 0;
                                     });
                                     availableQuantity = totalStock;
                                 } else {
+                                    // Fallback: dùng quantity từ product nếu allStocksMap chưa có data
                                     availableQuantity = product.quantity ?? 0;
                                 }
                             } catch (err) {
@@ -192,11 +193,12 @@ export default function EditExportReceiptPage() {
                 setLoading(false);
             }
         })();
-    }, [exportId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [exportId, allStocksMap]);
 
     // Cập nhật availableQuantity cho các sản phẩm đã có khi allStocksMap thay đổi (tổng từ tất cả kho)
     useEffect(() => {
-        if (allStocksMap.size === 0) return;
+        if (allStocksMap.size === 0 || items.length === 0) return;
 
         setItems((prev) =>
             prev.map((p) => {
@@ -209,12 +211,11 @@ export default function EditExportReceiptPage() {
                     });
                 }
 
-                if (p.availableQuantity !== totalStock) {
-                    return { ...p, availableQuantity: totalStock };
-                }
-                return p;
+                // Luôn cập nhật để đảm bảo giá trị đúng
+                return { ...p, availableQuantity: totalStock };
             }),
         );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [allStocksMap]);
 
     // Lọc customers theo search term
@@ -553,7 +554,8 @@ export default function EditExportReceiptPage() {
             }).flat(), // Flatten array of arrays
         };
 
-        console.log('📤 Payload gửi lên:', JSON.stringify(payload, null, 2));
+        // Debug: Payload gửi lên (commented for production)
+        // console.log('📤 Payload gửi lên:', JSON.stringify(payload, null, 2));
 
         try {
             setSaving(true);
@@ -1049,7 +1051,7 @@ export default function EditExportReceiptPage() {
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6">
-                                    {loadingProducts ? (
+                                    {loadingProducts || stocksLoading ? (
                                         <div className="text-center py-8 text-blue-gray-400">Đang tải...</div>
                                     ) : productError ? (
                                         <div className="text-center py-8 text-red-400">{productError}</div>

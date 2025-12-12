@@ -7,6 +7,7 @@ declare module '@heroicons/react/24/solid' {
   export const Squares2X2Icon: FC<SVGProps<SVGSVGElement>>;
   export const ClipboardDocumentCheckIcon: FC<SVGProps<SVGSVGElement>>;
   export const ChartBarIcon: FC<SVGProps<SVGSVGElement>>;
+  export const UserIcon: FC<SVGProps<SVGSVGElement>>;
 }
 
 declare module '@heroicons/react/24/outline' {

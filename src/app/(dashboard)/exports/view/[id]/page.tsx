@@ -1,19 +1,19 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import {
-    getExportById,
     type SupplierExport,
     type SupplierExportDetail,
 } from '@/services/inventory.service';
 
 import { getCustomer, type Customer } from '@/services/customer.service';
 import { getProduct } from '@/services/product.service';
-import { getAllStock } from '@/services/stock.service';
-import { getStores, type Store } from '@/services/store.service';
+import { useAllStocks } from '@/hooks/useAllStocks';
+import { useStores } from '@/hooks/useStores';
+import { useExport } from '@/hooks/useExport';
 import { buildImageUrl, formatDateTimeWithSeconds } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
 import { hasPermission, hasRole, PERMISSIONS } from '@/lib/permissions';
@@ -25,96 +25,94 @@ export default function ViewExportReceipt() {
     const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
     const id = Number(rawId);
 
-    const [data, setData] = useState<SupplierExport | null>(null);
-    const [items, setItems] = useState<(SupplierExportDetail & { availableQuantity?: number; storeItems?: Array<{ storeId: number; storeName: string; quantity: number }> })[]>([]);
+    // Load data với React Query cache
+    const { data: exportData, isLoading: exportLoading } = useExport(id);
+    const { data: stores = [] } = useStores();
+    const { data: allStocks = [] } = useAllStocks();
+
+    // Tạo stocks map từ cached data - dùng useMemo để tránh tạo mới mỗi render
+    const allStocksMap = useMemo(() => {
+        const map = new Map<number, Map<number, { quantity: number }>>();
+        allStocks.forEach((stock) => {
+            if (!map.has(stock.productId)) {
+                map.set(stock.productId, new Map());
+            }
+            map.get(stock.productId)!.set(stock.storeId, { quantity: stock.quantity });
+        });
+        return map;
+    }, [allStocks]);
+
+    // Fetch customer nếu có customerId
     const [customer, setCustomer] = useState<Customer | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [allStocksMap, setAllStocksMap] = useState<Map<number, Map<number, { quantity: number }>>>(new Map());
-    const [stores, setStores] = useState<Store[]>([]);
+    const [customerLoading, setCustomerLoading] = useState(false);
 
     useEffect(() => {
-        if (!id) return;
+        if (!exportData?.customerId) {
+            setCustomer(null);
+            return;
+        }
 
         (async () => {
             try {
-                setLoading(true);
+                setCustomerLoading(true);
+                const foundCustomer = await getCustomer(exportData.customerId!);
+                setCustomer(foundCustomer);
+            } catch (err) {
+                console.error('Failed to fetch customer:', err);
+                setCustomer(null);
+            } finally {
+                setCustomerLoading(false);
+            }
+        })();
+    }, [exportData?.customerId]);
 
-                // Fetch stores và stocks trước
-                const [storeList, allStocks] = await Promise.all([
-                    getStores(),
-                    getAllStock().catch(() => []),
-                ]);
-                setStores(storeList);
+    // Xử lý attachmentImages và mapped export
+    const data: SupplierExport | null = exportData
+        ? (() => {
+              let cleanNote = exportData.note || '';
+              const images = exportData.attachmentImages || [];
 
-                // Tạo map: productId -> Map<storeId, {quantity}>
-                const stocksMap = new Map<number, Map<number, { quantity: number }>>();
-                allStocks.forEach((stock) => {
-                    if (!stocksMap.has(stock.productId)) {
-                        stocksMap.set(stock.productId, new Map());
-                    }
-                    stocksMap.get(stock.productId)!.set(stock.storeId, {
-                        quantity: stock.quantity,
-                    });
-                });
-                setAllStocksMap(stocksMap);
+              // Nếu chưa có attachmentImages, thử parse từ note
+              if (images.length === 0 && cleanNote) {
+                  const parts = cleanNote.split(' | ');
+                  const textParts: string[] = [];
 
-                // Lấy phiếu xuất
-                const exportData = await getExportById(id);
+                  parts.forEach(part => {
+                      if (part.includes('Hợp đồng:') || part.includes('Sở cứ:')) {
+                          const urls = part.split(':')[1]?.split(',').map(u => u.trim()) || [];
+                          images.push(...urls);
+                      } else {
+                          textParts.push(part);
+                      }
+                  });
 
-                // ---- Fetch thông tin khách hàng nếu có customerId ----
-                let foundCustomer: Customer | null = null;
-                if (exportData.customerId) {
-                    try {
-                        foundCustomer = await getCustomer(exportData.customerId);
-                        console.log('👤 Found Customer:', foundCustomer);
-                        setCustomer(foundCustomer);
-                    } catch (err) {
-                        console.error('Failed to fetch customer:', err);
-                    }
-                }
+                  cleanNote = textParts.join(' | ');
+              }
 
-                // ⭐ Xử lý attachmentImages: nếu backend chưa trả về, parse từ note
-                let cleanNote = exportData.note || '';
-                const images = exportData.attachmentImages || [];
+              return {
+                  ...exportData,
+                  customerName: customer?.name ?? customer?.fullName ?? exportData.customerName ?? null,
+                  customerPhone: customer?.phone ?? exportData.customerPhone ?? null,
+                  customerAddress: customer?.address ?? exportData.customerAddress ?? null,
+                  note: cleanNote,
+                  attachmentImages: images,
+              };
+          })()
+        : null;
 
-                // Nếu chưa có attachmentImages, thử parse từ note
-                if (images.length === 0 && cleanNote) {
-                    // Pattern: "text | Hợp đồng: url1, url2 | Sở cứ: url3, url4"
-                    const parts = cleanNote.split(' | ');
-                    const textParts: string[] = [];
+    const [items, setItems] = useState<(SupplierExportDetail & { availableQuantity?: number; storeItems?: Array<{ storeId: number; storeName: string; quantity: number }> })[]>([]);
+    const loading = exportLoading || customerLoading;
 
-                    parts.forEach(part => {
-                        if (part.includes('Hợp đồng:') || part.includes('Sở cứ:')) {
-                            // Extract URLs
-                            const urls = part.split(':')[1]?.split(',').map(u => u.trim()) || [];
-                            images.push(...urls);
-                        } else {
-                            textParts.push(part);
-                        }
-                    });
+    useEffect(() => {
+        if (!exportData) return;
 
-                    cleanNote = textParts.join(' | ');
-                }
-
-                const mappedExport: SupplierExport = {
-                    ...exportData,
-                    customerName: foundCustomer?.name ?? foundCustomer?.fullName ?? exportData.customerName ?? null,
-                    customerPhone: foundCustomer?.phone ?? exportData.customerPhone ?? null,
-                    customerAddress: foundCustomer?.address ?? exportData.customerAddress ?? null,
-                    note: cleanNote,
-                    attachmentImages: images,
-                };
-
-                // ---- DEBUG: Kiểm tra dữ liệu từ API ----
-                console.log('🔍 Export Data:', exportData);
-                console.log('🔍 Mapped Export:', mappedExport);
-
-                setData(mappedExport);
-
+        (async () => {
+            try {
                 // ---- map lại danh sách sản phẩm ----
                 const rawItems = (exportData.items || []) as Array<SupplierExportDetail & { price?: number }>;
 
-                console.log('🔍 Raw Items:', rawItems);
+                // Debug: Raw Items (commented for production)
+                // console.log('🔍 Raw Items:', rawItems);
 
                 // ⭐ Nhóm items theo productId để hiển thị kho hàng
                 const productGroups = new Map<number, {
@@ -168,7 +166,7 @@ export default function ViewExportReceipt() {
                                 if (!productName) productName = product.name;
 
                                 // Tính tổng tồn kho từ tất cả kho
-                                const productStocks = stocksMap.get(group.productId);
+                                const productStocks = allStocksMap.get(group.productId);
                                 if (productStocks) {
                                     let totalStock = 0;
                                     productStocks.forEach((stockInfo) => {
@@ -194,7 +192,7 @@ export default function ViewExportReceipt() {
                         const storeItems: Array<{ storeId: number; storeName: string; quantity: number }> = [];
                         group.items.forEach((item) => {
                             if (item.storeId) {
-                                const store = storeList.find(s => s.id === item.storeId);
+                                const store = stores.find(s => s.id === item.storeId);
                                 const existingStore = storeItems.find(s => s.storeId === item.storeId);
                                 if (existingStore) {
                                     existingStore.quantity += item.quantity ?? 0;
@@ -227,15 +225,14 @@ export default function ViewExportReceipt() {
                     })
                 );
 
-                console.log('🔍 Mapped Items:', mappedItems);
+                // Debug: Mapped Items (commented for production)
+                // console.log('🔍 Mapped Items:', mappedItems);
                 setItems(mappedItems);
             } catch (err: unknown) {
                 console.error(err);
-            } finally {
-                setLoading(false);
             }
         })();
-    }, [id]);
+    }, [exportData, allStocksMap, stores]);
 
     if (loading) {
         return (

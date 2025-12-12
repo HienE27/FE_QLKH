@@ -12,7 +12,7 @@ import {
   Squares2X2Icon,
   ClipboardDocumentCheckIcon,
   ChartBarIcon,
-  UserCircleIcon,
+  UserIcon,
 } from '@heroicons/react/24/solid';
 
 type NavLinkItem = {
@@ -230,7 +230,7 @@ const navSections: NavSection[] = [
   {
     id: 'profile',
     label: 'Hồ sơ',
-    icon: <UserCircleIcon className="w-5 h-5" />,
+    icon: <UserIcon className="w-5 h-5" />,
     links: [
       {
         label: 'Hồ sơ người dùng',
@@ -315,7 +315,7 @@ export default function Sidebar() {
               console.error('Failed to refresh user profile:', error);
             }
             return;
-          } catch (error) {
+          } catch {
             // Invalid cache, clear it
             sessionStorage.removeItem('userProfile');
           }

@@ -1,7 +1,7 @@
 // src/app/(dashboard)/categories/customers/page.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import FilterSection from '@/components/common/FilterSection';
@@ -11,6 +11,7 @@ import Pagination from '@/components/common/Pagination';
 import { PAGE_SIZE } from '@/constants/pagination';
 import { usePagination } from '@/hooks/usePagination';
 import { useFilterReset } from '@/hooks/useFilterReset';
+import { useDebounce } from '@/hooks/useDebounce';
 import {
     searchCustomers,
     deleteCustomer,
@@ -30,15 +31,20 @@ export default function QuanLyKhachHang() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
 
+    // Debounce search inputs (500ms)
+    const debouncedSearchCode = useDebounce(searchCode, 500);
+    const debouncedSearchName = useDebounce(searchName, 500);
+    const debouncedSearchPhone = useDebounce(searchPhone, 500);
+
     // Load data từ BE với pagination
     const loadData = async (page: number = 1) => {
             try {
                 setLoading(true);
                 setError(null);
             const result = await searchCustomers({
-                code: searchCode || undefined,
-                name: searchName || undefined,
-                phone: searchPhone || undefined,
+                code: debouncedSearchCode || undefined,
+                name: debouncedSearchName || undefined,
+                phone: debouncedSearchPhone || undefined,
                 page: page - 1, // Backend dùng 0-based
                 size: PAGE_SIZE,
             });
@@ -59,7 +65,7 @@ export default function QuanLyKhachHang() {
     useEffect(() => {
         loadData(1);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchCode, searchName, searchPhone]);
+    }, [debouncedSearchCode, debouncedSearchName, debouncedSearchPhone]);
 
 
     // Sử dụng hook usePagination với scroll preservation
