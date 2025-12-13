@@ -1,7 +1,7 @@
 // src/components/common/FilterSection.tsx
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, memo } from 'react';
 
 interface FilterSectionProps {
     children: ReactNode;
@@ -13,7 +13,7 @@ interface FilterSectionProps {
     title?: string;
 }
 
-export default function FilterSection({
+function FilterSectionComponent({
     children,
     error,
     onClearFilter,
@@ -129,4 +129,7 @@ export default function FilterSection({
         </div>
     );
 }
+
+const FilterSection = memo(FilterSectionComponent);
+export default FilterSection;
 

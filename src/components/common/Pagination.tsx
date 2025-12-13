@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback, memo } from 'react';
 
 interface PaginationProps {
     currentPage: number;
@@ -11,7 +11,7 @@ interface PaginationProps {
     loading?: boolean;
 }
 
-export default function Pagination({
+function PaginationComponent({
     currentPage,
     totalPages,
     totalItems,
@@ -287,3 +287,6 @@ export default function Pagination({
         </div>
     );
 }
+
+const Pagination = memo(PaginationComponent);
+export default Pagination;

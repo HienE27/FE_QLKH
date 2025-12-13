@@ -6,7 +6,6 @@ import {
   useEffect,
   useMemo,
   useCallback,
-  type SyntheticEvent,
 } from 'react';
 import {
   useQuery,
@@ -24,6 +23,7 @@ import { getSuppliers, type Supplier } from '@/services/supplier.service';
 import { formatPrice, buildImageUrl } from '@/lib/utils';
 import { PAGE_SIZE } from '@/constants/pagination';
 import Pagination from '@/components/common/Pagination';
+import OptimizedImage from '@/components/common/OptimizedImage';
 import { useAllStocks } from '@/hooks/useAllStocks';
 import type { StockByStore } from '@/services/stock.service';
 import { usePagination } from '@/hooks/usePagination';
@@ -423,23 +423,13 @@ export default function ProductsPage() {
                                       {actualIndex}
                                     </td>
                                     <td className="px-4 text-center">
-                                      {imageUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={imageUrl}
-                                          alt={product.name}
-                                          className="h-10 w-10 object-cover rounded mx-auto"
-                                          onError={(e: SyntheticEvent<HTMLImageElement>) => {
-                                            const target = e.currentTarget;
-                                            target.src =
-                                              'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%23ddd" width="40" height="40"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="10"%3ENo%3C/text%3E%3C/svg%3E';
-                                          }}
-                                        />
-                                      ) : (
-                                        <div className="h-10 w-10 bg-blue-gray-200 rounded mx-auto flex items-center justify-center text-blue-gray-600 text-xs">
-                                          N/A
-                                        </div>
-                                      )}
+                                      <OptimizedImage
+                                        src={imageUrl}
+                                        alt={product.name}
+                                        width={40}
+                                        height={40}
+                                        className="mx-auto"
+                                      />
                                     </td>
                                     <td className="px-4 text-center text-sm text-blue-gray-800">
                                       {product.name}

@@ -1,7 +1,7 @@
 // src/components/common/ActionButtons.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 
 interface ActionButtonsProps {
     onView?: () => void;
@@ -92,7 +92,7 @@ function ActionButton({
     );
 }
 
-export default function ActionButtons({
+function ActionButtonsComponent({
     onView,
     onEdit,
     onDelete,
@@ -166,4 +166,7 @@ export default function ActionButtons({
         </div>
     );
 }
+
+const ActionButtons = memo(ActionButtonsComponent);
+export default ActionButtons;
 

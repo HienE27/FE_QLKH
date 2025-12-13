@@ -8,6 +8,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import MobileMenu from '@/components/layout/MobileMenu';
 import { QueryClientProvider } from '@/providers/QueryClientProvider';
 import { ConfirmProvider } from '@/hooks/useConfirm';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -50,15 +51,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider>
-      <div className="min-h-screen bg-blue-gray-50/50">
-        <Sidebar />
-        <MobileMenu />
-        <main className="p-4 xl:ml-80 pt-16 xl:pt-4">
-          <ConfirmProvider>
-            {children}
-          </ConfirmProvider>
-        </main>
-      </div>
+      <ErrorBoundary>
+        <div className="min-h-screen bg-blue-gray-50/50">
+          <Sidebar />
+          <MobileMenu />
+          <main className="p-4 xl:ml-80 pt-16 xl:pt-4">
+            <ConfirmProvider>
+              {children}
+            </ConfirmProvider>
+          </main>
+        </div>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

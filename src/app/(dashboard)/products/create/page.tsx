@@ -28,7 +28,17 @@ import { createOrUpdateStock } from '@/services/stock.service';
 import { aiProductDescription } from '@/services/ai.service';
 
 import { parseMoney } from '@/lib/utils';
-import RichTextEditor from '@/components/editor/RichTextEditor';
+import dynamic from 'next/dynamic';
+
+const RichTextEditor = dynamic(() => import('@/components/editor/RichTextEditor'), {
+  loading: () => (
+    <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 animate-pulse">
+      <div className="h-10 bg-gray-200 rounded mb-2" />
+      <div className="h-32 bg-gray-200 rounded" />
+    </div>
+  ),
+  ssr: false,
+});
 import { productSchema, type ProductFormData } from '@/lib/validation';
 import { useFormValidation } from '@/hooks/useFormValidation';
 import { FormField, Input, Select } from '@/components/common/FormField';

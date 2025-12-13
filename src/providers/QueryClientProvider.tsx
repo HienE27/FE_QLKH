@@ -19,8 +19,28 @@ export function QueryClientProvider({ children }: Props) {
         defaultOptions: {
           queries: {
             refetchOnWindowFocus: false,
+            refetchOnMount: true,
+            refetchOnReconnect: true,
+            retry: (failureCount, error) => {
+              // Don't retry on 4xx errors (client errors)
+              if (error && typeof error === 'object' && 'status' in error) {
+                const status = (error as { status: number }).status;
+                if (status >= 400 && status < 500) {
+                  return false;
+                }
+              }
+              // Retry up to 2 times for network/server errors
+              return failureCount < 2;
+            },
+            retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+            staleTime: 60 * 1000, // 1 minute
+            gcTime: 5 * 60 * 1000, // 5 minutes (formerly cacheTime)
+            // Keep previous data while fetching new data (better UX for pagination)
+            placeholderData: (previousData) => previousData,
+          },
+          mutations: {
             retry: 1,
-            staleTime: 60 * 1000,
+            retryDelay: 1000,
           },
         },
       }),
